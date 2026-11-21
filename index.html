@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#eef4ff"><title>まなびステップ｜数学</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f3f6fc;color:#1e2d49;font-family:system-ui,-apple-system,"Hiragino Kaku Gothic ProN",Meiryo,sans-serif;line-height:1.6}main{width:min(620px,100%);margin:auto;padding:22px 16px 55px}h1{font-size:27px;margin:5px 0 0}.sub{color:#64748b;font-size:14px;margin:0 0 20px}.card{background:white;border-radius:22px;padding:24px 19px;box-shadow:0 6px 24px #22376515;margin:14px 0}.pill{display:inline-block;border-radius:20px;padding:3px 12px;background:#e8f0ff;color:#1758bd;font-size:13px;font-weight:700}.question{font-size:31px;font-weight:750;line-height:1.5;margin:28px 0;text-align:center;overflow-wrap:anywhere}.choice{display:block;width:100%;border:2px solid #d8e2f0;border-radius:14px;background:white;text-align:left;padding:14px 16px;font-size:19px;font-weight:650;color:#1e2d49;margin:10px 0;min-height:57px;cursor:pointer}.choice:active{background:#eaf2ff}.choice:disabled{cursor:default;opacity:.68}.choice.correct{border-color:#238a59;background:#e6f8ed;opacity:1}.choice.wrong{border-color:#d04c4c;background:#fff0ef;opacity:1}.primary{border:0;border-radius:14px;background:#1769d1;color:white;display:block;width:100%;font-size:19px;font-weight:700;padding:15px 12px;margin-top:16px;cursor:pointer}.secondary{border:1px solid #cbd6e7;background:white;color:#31527c;border-radius:12px;padding:10px 15px;cursor:pointer}.feedback{padding:15px 16px;margin-top:15px;border-radius:14px;background:#f1f6ff;white-space:pre-line}.good{background:#e9f9ed}.bad{background:#fff4e6}.muted{color:#64748b;font-size:14px}.progress{background:#e3eaf4;border-radius:20px;height:9px;overflow:hidden;margin:14px 0 8px}.progress>div{height:100%;background:#1769d1;width:0;transition:width .2s}.hide{display:none}.row{display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap}.foot{margin-top:23px;font-size:12px;color:#64748b}
+</style></head><body><main>
+<header><div class="pill">中学数学・基礎から</div><h1>📘 まなびステップ</h1><p class="sub">わからないところから、一問ずつ進もう。</p></header>
+<section id="intro" class="card"><h2>まずは、ここからスタート！</h2><p>中学1年生の計算から順番に確認するよ。正解なら次へ、間違えたら解説して似た問題でもう一度。</p><p class="muted">点数は気にしなくて大丈夫。毎日10分でも続けよう。</p><p id="resume" class="muted"></p><button class="primary" id="start">学習をはじめる</button></section>
+<section id="study" class="hide"><div class="card"><div class="row"><span id="unit" class="pill"></span><span id="counter" class="muted"></span></div><div class="progress"><div id="bar"></div></div><div id="question" class="question"></div><div id="choices"></div><div id="feedback" class="feedback hide" role="status"></div><button class="primary hide" id="next">次の問題へ</button></div><div class="row"><button id="home" class="secondary">最初の画面へ</button><span id="stats" class="muted"></span></div></section>
+<p class="foot">この学習記録は現在のブラウザ内に保存されます。端末を変えたり、ブラウザのデータを削除した場合は引き継がれません。</p>
+</main><script>
+(function(){
+"use strict";
+const lessons=[
+{title:"正の数・負の数（たし算）",qs:[{q:"−3 + 8 = ?",a:5,why:"−3から右へ8進むと5になるよ。",v:[5,-5,11,-11]},{q:"−4 + 9 = ?",a:5,why:"−4から9増えるので5。",v:[5,-13,13,-5]}]},
+{title:"正の数・負の数（ひき算）",qs:[{q:"6 − 10 = ?",a:-4,why:"6から10引くと0を4つ通り越すので−4。",v:[-4,4,16,-16]},{q:"3 − 8 = ?",a:-5,why:"3から8引くと−5。",v:[-5,5,11,-11]}]},
+{title:"かけ算と符号",qs:[{q:"(−3) × 4 = ?",a:-12,why:"負の数×正の数は負。3×4=12なので−12。",v:[-12,12,-7,7]},{q:"(−2) × (−5) = ?",a:10,why:"負の数×負の数は正。2×5=10。",v:[10,-10,7,-7]}]},
+{title:"文字式",qs:[{q:"3x + 2x = ?",a:"5x",why:"xが3個と2個で、合計5個。",v:["5x","6x","5","x"]},{q:"7x − 4x = ?",a:"3x",why:"xが7個から4個減るので3x。",v:["3x","11x","3","28x"]}]},
+{title:"一次方程式（基本）",qs:[{q:"x + 5 = 12 の x は？",a:7,why:"両辺から5を引くと x=12−5=7。",v:[7,17,5,-7]},{q:"x − 4 = 9 の x は？",a:13,why:"両辺に4を足すと x=9+4=13。",v:[13,5,-13,36]}]},
+{title:"一次方程式（かけ算）",qs:[{q:"3x = 18 の x は？",a:6,why:"両辺を3で割ると x=6。",v:[6,15,54,3]},{q:"5x = 35 の x は？",a:7,why:"両辺を5で割ると x=7。",v:[7,30,40,175]}]},
+{title:"移項",qs:[{q:"2x + 3 = 11 の x は？",a:4,why:"2x=11−3=8、両辺を2で割ると x=4。",v:[4,7,14,8]},{q:"4x − 5 = 7 の x は？",a:3,why:"4x=7+5=12、両辺を4で割ると x=3。",v:[3,2,12,48]}]},
+{title:"両辺に文字がある方程式",qs:[{q:"5x = 2x + 12 の x は？",a:4,why:"5x−2x=12 → 3x=12 → x=4。",v:[4,12,3,6]},{q:"7x + 2 = 3x + 18 の x は？",a:4,why:"7x−3x=18−2 → 4x=16 → x=4。",v:[4,5,16,-4]}]}
+];
+const byId=id=>document.getElementById(id);
+let progress={unit:0,attempt:0,correct:0,streak:0,variant:0};
+try{const p=JSON.parse(localStorage.getItem("manabi-step-v1"));if(p&&Number.isInteger(p.unit)&&p.unit>=0&&p.unit<=lessons.length) progress={...progress,...p}}catch(e){}
+function save(){try{localStorage.setItem("manabi-step-v1",JSON.stringify(progress))}catch(e){}}
+function showIntro(){byId("study").classList.add("hide");byId("intro").classList.remove("hide");byId("resume").textContent=progress.unit<lessons.length?"前回の続き："+lessons[progress.unit].title:"前回、全単元をクリアしたよ！"}
+function start(){byId("intro").classList.add("hide");byId("study").classList.remove("hide");render()}
+function choicesFor(q){const a=q.v.slice();return a.sort((x,y)=>String(x).localeCompare(String(y),"ja"))}
+function render(){
+ const complete=progress.unit>=lessons.length;
+ byId("feedback").classList.add("hide");byId("next").classList.add("hide");byId("choices").innerHTML="";
+ byId("stats").textContent="正解 "+progress.correct+"問 / 解答 "+progress.attempt+"回";
+ byId("bar").style.width=Math.min(100,progress.unit/lessons.length*100)+"%";
+ if(complete){byId("unit").textContent="おめでとう！";byId("counter").textContent="全単元クリア";byId("question").textContent="基礎コース、完了！🎉";byId("feedback").textContent="最後まで頑張ったね。もう一度、最初から復習できるよ。";byId("feedback").className="feedback good";byId("next").textContent="もう一度はじめる";byId("next").classList.remove("hide");byId("next").onclick=()=>{progress={unit:0,attempt:0,correct:0,streak:0,variant:0};save();render()};return}
+ const l=lessons[progress.unit],q=l.qs[progress.variant%l.qs.length];
+ byId("unit").textContent=l.title;byId("counter").textContent=(progress.unit+1)+" / "+lessons.length+"単元";byId("question").textContent=q.q;
+ choicesFor(q).forEach(v=>{const b=document.createElement("button");b.type="button";b.className="choice";b.textContent=String(v);b.onclick=()=>answer(v,q,b);byId("choices").appendChild(b)});
+}
+function answer(v,q,b){
+ const right=String(v)===String(q.a);progress.attempt++;if(right){progress.correct++;progress.streak++}else{progress.streak=0}
+ document.querySelectorAll(".choice").forEach(el=>{el.disabled=true;if(el.textContent===String(q.a))el.classList.add("correct")});if(!right)b.classList.add("wrong");
+ const f=byId("feedback");f.className="feedback "+(right?"good":"bad");f.textContent=(right?"⭕ 正解！ いい調子！":"💡 おしい！ 正しい答えは "+q.a+" だよ。")+"\n"+q.why+(right?"":"\n次は似た問題で練習しよう。");
+ byId("next").classList.remove("hide");
+ byId("next").textContent=right?(progress.streak>=2?"次の単元へ":"次の問題へ"):"似た問題に挑戦";
+ byId("next").onclick=()=>{
+ if(right&&progress.streak>=2){progress.unit++;progress.streak=0;progress.variant=0}
+ else progress.variant=(progress.variant+1)%2;
+ save();render()};
+ save();byId("stats").textContent="正解 "+progress.correct+"問 / 解答 "+progress.attempt+"回"
+}
+byId("start").addEventListener("click",start);byId("home").addEventListener("click",showIntro);showIntro();
+})();
+</script></body></html>
