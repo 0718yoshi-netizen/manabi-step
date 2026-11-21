@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#ffd8e8">
-  <title>まなびステップ｜かわいい数学れんしゅう</title>
+  <title>まなびステップ｜60問コース</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;800&display=swap" rel="stylesheet">
@@ -172,9 +172,9 @@
           <h1>まなびステップ</h1>
           <p>かわいく、やさしく、でもちゃんとわかる。<br>中学数学を一問ずつ進める、スマホ学習ページだよ。</p>
           <div class="badge-row">
-            <span class="badge pink">🌸 中3女子向けのやさしい雰囲気</span>
+            <span class="badge pink">🌸 ゆるく楽しく数学れんしゅう</span>
             <span class="badge mint">📱 スマホで見やすい</span>
-            <span class="badge blue">🧠 苦手だけを復習</span>
+            <span class="badge blue">🧠 まちがえても解説つき</span>
           </div>
         </div>
       </div>
@@ -182,7 +182,7 @@
 
     <section id="intro" class="card">
       <h2>いっしょにがんばろ 💗</h2>
-      <p class="lead">最初は中1の基礎からスタート。<br>「わからない」をそのままにせず、一歩ずつ進もう。</p>
+      <p class="lead">中1から中3の基礎12単元・全60問。<br>「わからない」をそのままにせず、一歩ずつ進もう。</p>
       <div class="support">
         <div class="mini" aria-hidden="true"><span class="e l"></span><span class="e r"></span><span class="m"></span></div>
         <div>
@@ -191,7 +191,7 @@
         </div>
       </div>
       <p id="resumeText" class="small" style="margin-top:12px;"></p>
-      <button id="startBtn" type="button" class="btn btn-main" onclick="window.manabiStart && window.manabiStart()">学習をはじめる</button><p id="startHelp" class="small" style="margin:12px 0 0">ボタンが動かない場合は、LINEなどのアプリ内ブラウザではなくSafariでこのURLを開いてね。</p>
+      <button id="startBtn" class="btn btn-main">学習をはじめる</button>
     </section>
 
     <section id="study" class="hide">
@@ -221,288 +221,114 @@
       </div>
     </section>
 
-    <p class="foot">※ このページはブラウザに学習記録を保存します。別の端末では引き継がれません。</p>
+    <p class="foot">※ 正解すると自動で次へ進むよ。間違えたら解説を読んで「類題へ」を押してね。 このページはブラウザに学習記録を保存します。別の端末では引き継がれません。</p>
   </main>
 
   <script>
-  (() => {
-    "use strict";
-
-    const messages = [
-      "🌼 できるところからでOK。あせらずいこう！",
-      "🍀 まちがえても大丈夫。わかるまでやればいいよ。",
-      "🩷 1問ずつで十分えらい。ちゃんと前に進んでる！",
-      "✨ 今日やった分だけ、明日の自分がラクになるよ。",
-      "🎀 コツコツがいちばん強い。次の1問いってみよう！"
-    ];
-
-    const lessons = [
-      { title: "正の数・負の数（たし算）", qs: [
-        { q: "−3 + 8 = ?", a: "5", why: "−3から右へ8進むと、5になるよ。", v: ["5", "−5", "11", "−11"] },
-        { q: "−4 + 9 = ?", a: "5", why: "−4から9増えるので、答えは5。", v: ["5", "−13", "13", "−5"] }
-      ]},
-      { title: "正の数・負の数（ひき算）", qs: [
-        { q: "6 − 10 = ?", a: "−4", why: "6から10引くと、0を4こ通りこして−4になるよ。", v: ["−4", "4", "16", "−16"] },
-        { q: "3 − 8 = ?", a: "−5", why: "3から8引くので、答えは−5。", v: ["−5", "5", "11", "−11"] }
-      ]},
-      { title: "かけ算と符号", qs: [
-        { q: "(−3) × 4 = ?", a: "−12", why: "負×正は負。3×4=12だから、−12。", v: ["−12", "12", "−7", "7"] },
-        { q: "(−2) × (−5) = ?", a: "10", why: "負×負は正。2×5=10なので、10。", v: ["10", "−10", "7", "−7"] }
-      ]},
-      { title: "文字式", qs: [
-        { q: "3x + 2x = ?", a: "5x", why: "xが3こ と xが2こ で、合わせて5x。", v: ["5x", "6x", "5", "x"] },
-        { q: "7x − 4x = ?", a: "3x", why: "同じ文字どうしを計算すると、3x。", v: ["3x", "11x", "3", "28x"] }
-      ]},
-      { title: "一次方程式（基本）", qs: [
-        { q: "x + 5 = 12 の x は？", a: "7", why: "両方から5を引くと、x=7。", v: ["7", "17", "5", "−7"] },
-        { q: "x − 4 = 9 の x は？", a: "13", why: "両方に4を足すと、x=13。", v: ["13", "5", "−13", "36"] }
-      ]},
-      { title: "一次方程式（かけ算）", qs: [
-        { q: "3x = 18 の x は？", a: "6", why: "両方を3で割ると、x=6。", v: ["6", "15", "54", "3"] },
-        { q: "5x = 35 の x は？", a: "7", why: "両方を5で割ると、x=7。", v: ["7", "30", "40", "175"] }
-      ]},
-      { title: "移項", qs: [
-        { q: "2x + 3 = 11 の x は？", a: "4", why: "3を移項して、2x=8。2で割るとx=4。", v: ["4", "7", "14", "8"] },
-        { q: "4x − 5 = 7 の x は？", a: "3", why: "−5を移項して、4x=12。4で割ってx=3。", v: ["3", "2", "12", "48"] }
-      ]},
-      { title: "両辺に文字がある方程式", qs: [
-        { q: "5x = 2x + 12 の x は？", a: "4", why: "2xを左へ移項して、3x=12。だからx=4。", v: ["4", "12", "3", "6"] },
-        { q: "7x + 2 = 3x + 18 の x は？", a: "4", why: "文字を左、数字を右にまとめると、4x=16。だからx=4。", v: ["4", "5", "16", "−4"] }
-      ]}
-    ];
-
-    const $ = id => document.getElementById(id);
-    const intro = $("intro");
-    const study = $("study");
-    const resumeText = $("resumeText");
-    const startBtn = $("startBtn");
-    const backBtn = $("backBtn");
-    const unitTitle = $("unitTitle");
-    const counter = $("counter");
-    const progressBar = $("progressBar");
-    const questionBox = $("questionBox");
-    const choicesBox = $("choicesBox");
-    const feedbackBox = $("feedbackBox");
-    const nextBtn = $("nextBtn");
-    const motivText = $("motivText");
-    const scoreCorrect = $("scoreCorrect");
-    const scoreAttempt = $("scoreAttempt");
-    const scoreStreak = $("scoreStreak");
-
-    let state = {
-      unit: 0,
-      variant: 0,
-      correct: 0,
-      attempt: 0,
-      streak: 0
-    };
-
-    try {
-      const saved = JSON.parse(localStorage.getItem("manabi-step-cute-v1"));
-      if (saved && typeof saved === "object") {
-        state = Object.assign(state, saved);
-      }
-    } catch (_) {}
-    // 古いバージョンの学習記録で画面が止まらないようにする。
-    state.unit = Number.isInteger(Number(state.unit)) ? Math.min(lessons.length,Math.max(0,Number(state.unit))) : 0;
-    state.variant = Number.isFinite(Number(state.variant)) ? Math.max(0,Number(state.variant)) : 0;
-    state.attempt = Number.isFinite(Number(state.attempt)) ? Math.max(0,Number(state.attempt)) : 0;
-    state.correct = Number.isFinite(Number(state.correct)) ? Math.max(0,Number(state.correct)) : 0;
-    state.streak = Number.isFinite(Number(state.streak)) ? Math.max(0,Number(state.streak)) : 0;
-
-    function save() {
-      try {
-        localStorage.setItem("manabi-step-cute-v1", JSON.stringify(state));
-      } catch (_) {}
-    }
-
-    function showIntro() {
-      intro.classList.remove("hide");
-      study.classList.add("hide");
-      if (state.unit >= lessons.length) {
-        resumeText.textContent = "前回は全単元クリア！ もう一度最初から復習できるよ。";
-      } else {
-        resumeText.textContent = `前回のつづき：${lessons[state.unit].title}`;
-      }
-    }
-
-    function startStudy() {
-      intro.classList.add("hide");
-      study.classList.remove("hide");
-      render();
-    }
-
-    window.manabiStart = startStudy;
-
-    function shuffleLike(options) {
-      const arr = options.slice();
-      for (let i = arr.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [arr[i], arr[j]] = [arr[j], arr[i]];
-      }
-      return arr;
-    }
-
-    function updateScores() {
-      scoreCorrect.textContent = String(state.correct);
-      scoreAttempt.textContent = String(state.attempt);
-      scoreStreak.textContent = String(state.streak);
-    }
-
-
-    // 問題は解答ごとに新しく作る。同じ2問を往復させない。
-    function makeQuestion(unit, index) {
-      const k = Math.max(0, Math.floor(Number(index) || 0));
-      const n = 2 + k % 11;
-      const m = 3 + Math.floor(k / 11) % 11;
-      const fmt = v => v < 0 ? "−" + Math.abs(v) : String(v);
-      function build(question, answer, explain, decoys) {
-        const options = [String(answer)];
-        for (const d of decoys) if (!options.includes(String(d))) options.push(String(d));
-        let supplement = 1;
-        while (options.length < 4) {
-          const extra = typeof answer === "string" && answer.endsWith("x")
-            ? String(supplement + 1) + "x" : fmt(Number(answer) + supplement);
-          if (!options.includes(extra)) options.push(extra);
-          supplement++;
+  (function(){
+    'use strict';
+    const $=id=>document.getElementById(id);
+    const sections={intro:$('intro'),study:$('study')};
+    const ids=['resumeText','startBtn','backBtn','unitTitle','counter','progressBar','questionBox','choicesBox','feedbackBox','nextBtn','motivText','scoreCorrect','scoreAttempt','scoreStreak'];
+    const el=Object.fromEntries(ids.map(id=>[id,$(id)]));
+    const totalUnits=12, requiredPerUnit=5;
+    const titles=['正の数と負の数・加法','正の数と負の数・減法','正負の数の乗法','正負の数の除法','文字式の整理','文字式の代入','方程式の基礎','方程式の移項','比例と反比例','連立方程式の基礎','平方根','展開・因数分解'];
+    const messages=['🌸 1問ずつ進めよう！','🍀 間違いは成長のヒントだよ。','💗 自分のペースで大丈夫。'];
+    const initial=()=>({unit:0,inUnit:0,attempt:0,correct:0,streak:0,serial:0,wrongInRow:0});
+    let state=initial(),active=null,pending=false;
+    const key='manabi-step-progress-v3';
+    try{
+      const saved=JSON.parse(localStorage.getItem(key));
+      if(saved && typeof saved==='object'){
+        for(const field of Object.keys(state)){
+          if(Number.isSafeInteger(saved[field]) && saved[field]>=0 && saved[field]<1000000) state[field]=saved[field];
         }
-        return {q:question, a:String(answer), why:explain, v:options.slice(0,4)};
       }
-      if (unit === 0) {
-        const a=n, b=n+m;
-        return build(fmt(-a)+" + "+b+" = ?",fmt(m),"マイナス"+a+"から"+b+"増えると"+m+"になるよ。",
-          [fmt(-m),fmt(a+b),fmt(-a-b)]);
-      }
-      if (unit === 1) {
-        const a=n+1, b=a+m;
-        return build(a+" − "+b+" = ?",fmt(-m),b+"の方が"+m+"大きいので、答えは−"+m+"。",
-          [fmt(m),fmt(a+b),fmt(-a-b)]);
-      }
-      if (unit === 2) {
-        const a=2+k%8, b=2+Math.floor(k/8)%8, both=k%2===1;
-        return build("(−"+a+") × "+(both?"(−"+b+")":b)+" = ?",fmt((both?1:-1)*a*b),
-          both?"負の数×負の数は正になるよ。":"負の数×正の数は負になるよ。",
-          [fmt((both?-1:1)*a*b),fmt(a+b),fmt(-a-b)]);
-      }
-      if (unit === 3) {
-        const a=2+k%12,b=1+Math.floor(k/12)%10,minus=k%2===1;
-        const ans=minus?a-b:a+b;
-        return build(a+"x "+(minus?"−":"+")+" "+b+"x = ?",fmt(ans)+"x",
-          "xのついた項どうし、係数を計算するよ。",
-          [fmt(a*b)+"x",fmt(a+b+(minus?1:-1))+"x",fmt(ans)]);
-      }
-      if (unit === 4) {
-        const target=2+k%15, offset=2+Math.floor(k/15)%12;
-        return build("x + "+offset+" = "+(target+offset)+" の x は？",fmt(target),
-          "両辺から"+offset+"を引けば、x = "+target+"。", [fmt(target+offset),fmt(offset),fmt(target+offset+offset)]);
-      }
-      if (unit === 5) {
-        const coefficient=2+k%9,target=2+Math.floor(k/9)%12;
-        return build(coefficient+"x = "+(coefficient*target)+" の x は？",fmt(target),
-          "両辺を"+coefficient+"で割ると x = "+target+"。", [fmt(target+coefficient),fmt(coefficient*target),fmt(coefficient)]);
-      }
-      if (unit === 6) {
-        const coefficient=2+k%7,target=2+Math.floor(k/7)%11,offset=2+Math.floor(k/77)%9;
-        const minus=k%2===1, rhs=coefficient*target+(minus?-offset:offset);
-        return build(coefficient+"x "+(minus?"−":"+")+" "+offset+" = "+rhs+" の x は？",
-          fmt(target),"数字の項を移項してから、"+coefficient+"で割ると x = "+target+"。",
-          [fmt(target+offset),fmt(coefficient*target),fmt(target+coefficient)]);
-      }
-      const left=4+k%8, right=1+Math.floor(k/8)%3, target=2+Math.floor(k/24)%10,constant=1+Math.floor(k/240)%8;
-      const rhs=(left-right)*target+constant;
-      return build(left+"x + "+constant+" = "+right+"x + "+rhs+" の x は？",
-        fmt(target),right+"xを左へ、"+constant+"を右へ移項して、"+(left-right)+"x = "+((left-right)*target)+"。だから x = "+target+"。",
-        [fmt(target+1),fmt(rhs),fmt(left-right)]);
+    }catch(e){}
+    if(state.unit>totalUnits)state=initial();
+    function save(){try{localStorage.setItem(key,JSON.stringify(state))}catch(e){}}
+    function showIntro(){ sections.intro.classList.remove('hide');sections.study.classList.add('hide');
+      el.resumeText.textContent=state.unit>=totalUnits?'全12単元を完了！もう一度復習できるよ。':`前回のつづき：${titles[state.unit]}（${state.inUnit+1}/${requiredPerUnit}問）`;
     }
-
-    function render() {
-      updateScores();
-      motivText.textContent = messages[Math.floor(Math.random() * messages.length)];
-      feedbackBox.className = "feedback hide";
-      nextBtn.classList.add("hide");
-      choicesBox.innerHTML = "";
-
-      if (state.unit >= lessons.length) {
-        unitTitle.textContent = "全クリア";
-        counter.textContent = "おつかれさま！";
-        progressBar.style.width = "100%";
-        questionBox.textContent = "基礎コース、クリア！ 🎉";
-        feedbackBox.textContent = "ほんとうによく頑張ったね！\nもう一度はじめると、最初から復習できるよ。";
-        feedbackBox.className = "feedback good";
-        nextBtn.textContent = "もう一度はじめる";
-        nextBtn.classList.remove("hide");
-        nextBtn.onclick = () => {
-          state = { unit: 0, variant: 0, correct: 0, attempt: 0, streak: 0 };
-          save();
-          render();
-        };
-        return;
+    function fmt(x){return String(x).replace(/-/g,'−')}
+    function makeQuestion(u,k){
+      const a=2+(k*7)%13,b=2+(k*5+3)%11,c=2+(k*3+2)%8, x=2+(k*11)%9;
+      let q='',ans=0,why='',d=[];
+      switch(u){
+        case 0:q=`${fmt(-a)} + ${a+b} = ?`; ans=b;why=`−${a}から${a+b}増えるので${b}だよ。`;d=[-b,a+b,-a-b];break;
+        case 1:q=`${a} − ${a+b} = ?`;ans=-b;why=`${a}から${a+b}引くと−${b}になるよ。`;d=[b,a+b,-a-b];break;
+        case 2:q=`(−${a}) × ${b} = ?`;ans=-a*b;why='負の数×正の数は負。数の部分をかけよう。';d=[a*b,-a-b,a+b];break;
+        case 3:q=`${a*b} ÷ (−${a}) = ?`;ans=-b;why=`${a*b}÷${a}=${b}、正÷負は負だよ。`;d=[b,a,-a];break;
+        case 4:q=`${a}x + ${b}x = ?`;ans=(a+b)+'x';why='同じ文字xの係数を足そう。';d=[a*b+'x',(a+b+1)+'x',String(a+b)];break;
+        case 5:q=`x = ${x} のとき、${a}x + ${b} = ?`;ans=a*x+b;why=`xに${x}を代入すると${a}×${x}+${b}=${ans}。`;d=[a+b,a*x-b,a*x];break;
+        case 6:q=`${a}x = ${a*x} の x は？`;ans=x;why=`両辺を${a}で割るとx=${x}。`;d=[a*x,x+a,x-1];break;
+        case 7:q=`${a}x + ${b} = ${a*x+b} の x は？`;ans=x;why=`${b}を移項して${a}x=${a*x}、両辺を${a}で割るよ。`;d=[a*x+b,x+b,a*x];break;
+        case 8:q=`y = ${a}x のとき、x = ${x} なら y は？`;ans=a*x;why=`xに${x}を代入して${a}×${x}だよ。`;d=[a+x,a*x+b,x];break;
+        case 9:q=`x + y = ${x+b}、x − y = ${x-b} の x は？`;ans=x;why='2つの式を足すと2xになり、yが消えるよ。';d=[b,x+b,x-b];break;
+        case 10:q=`√${a*a} = ?`;ans=a;why=`${a}×${a}=${a*a}。√は正の平方根を表すよ。`;d=[a*a,-a,a+1];break;
+        case 11:q=`(x + ${a})(x + ${b}) の x の係数は？`;ans=a+b;why=`展開するとx²+${a+b}x+${a*b}。`;d=[a*b,a+b+1,a];break;
       }
-
-      const lesson = lessons[state.unit];
-      const q = makeQuestion(state.unit, state.variant);
-      unitTitle.textContent = `📘 ${lesson.title}`;
-      counter.textContent = `${state.unit + 1} / ${lessons.length} 単元`;
-      progressBar.style.width = `${(state.unit / lessons.length) * 100}%`;
-      questionBox.textContent = q.q;
-
-      const options = shuffleLike(q.v);
-      options.forEach(opt => {
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "choice";
-        btn.textContent = opt;
-        btn.addEventListener("click", () => answer(opt, q, btn));
-        choicesBox.appendChild(btn);
-      });
+      const answer=String(ans);const options=[answer];
+      for(const v of d){let st=String(v);if(!options.includes(st))options.push(st)}
+      for(let n=1;options.length<4;n++){const z=typeof ans==='string'&&ans.endsWith('x')?`${a+b+n}x`:String(Number(ans)+n);if(!options.includes(z))options.push(z)}
+      return {q,answer,why,options:options.slice(0,4).sort((one,two)=>{
+        // deterministic variety across questions: stable order on re-render
+        const h=v=>[...v].reduce((z,ch)=>(z*31+ch.charCodeAt(0))%1033,k*17+u*79);
+        return h(one)-h(two);
+      })};
     }
-
-    function answer(selected, q, clickedBtn) {
-      const isRight = String(selected) === String(q.a);
-      state.attempt += 1;
-      if (isRight) {
-        state.correct += 1;
-        state.streak += 1;
-      } else {
-        state.streak = 0;
+    function updateScore(){el.scoreCorrect.textContent=state.correct;el.scoreAttempt.textContent=state.attempt;el.scoreStreak.textContent=state.streak}
+    function render(){pending=false;updateScore();el.feedbackBox.className='feedback hide';el.nextBtn.classList.add('hide');el.choicesBox.replaceChildren();
+      if(state.unit>=totalUnits){
+        el.unitTitle.textContent='🎉 全単元クリア';el.counter.textContent='完了';el.progressBar.style.width='100%';
+        el.questionBox.textContent='60問クリア！おつかれさま 💗';
+        el.feedbackBox.textContent='中学数学の基礎12単元を最後まで取り組んだよ。もう一度復習しよう。';el.feedbackBox.className='feedback good';
+        el.nextBtn.textContent='最初からもう一度';el.nextBtn.classList.remove('hide');
+        el.nextBtn.onclick=()=>{state=initial();save();render()};return;
       }
-      save();
-      updateScores();
-
-      document.querySelectorAll(".choice").forEach(el => {
-        el.disabled = true;
-        if (el.textContent === String(q.a)) el.classList.add("correct");
-      });
-      if (!isRight) clickedBtn.classList.add("wrong");
-
-      feedbackBox.className = `feedback ${isRight ? "good" : "bad"}`;
-      feedbackBox.textContent = isRight
-        ? `⭕ 正解！\n${q.why}\nその調子で次もいこう。`
-        : `💡 おしい！ 正しい答えは ${q.a} だよ。\n${q.why}\n次は似た問題でもう一回やってみよう。`;
-
-      nextBtn.classList.remove("hide");
-      if (isRight) {
-        nextBtn.textContent = "次の単元へ";
-        nextBtn.onclick = () => {
-          state.unit += 1;
-          state.variant = 0;
-          state.streak = 0;
-          save();
-          render();
-        };
-      } else {
-        nextBtn.textContent = "別の問題で確認する";
-        nextBtn.onclick = () => {
-          state.variant += 1;
-          save();
-          render();
-        };
+      const u=state.unit;
+      el.unitTitle.textContent=`📖 ${titles[u]}`;
+      el.counter.textContent=`単元${u+1}/${totalUnits} ・ ${state.inUnit+1}/${requiredPerUnit}問`;
+      el.progressBar.style.width=`${Math.round(((u*requiredPerUnit+state.inUnit)/(totalUnits*requiredPerUnit))*100)}%`;
+      active=makeQuestion(u,state.serial);
+      el.questionBox.textContent=active.q;el.motivText.textContent=messages[state.serial%messages.length];
+      for(const opt of active.options){
+        const button=document.createElement('button');button.type='button';button.className='choice';button.textContent=fmt(opt);
+        button.addEventListener('click',()=>answer(opt,button),{once:true});el.choicesBox.append(button);
       }
     }
-
-    // onclick 属性からも呼べるため、アプリ内ブラウザで二重実行しない。
-    startBtn.addEventListener("click", function(){ if(study.classList.contains("hide")) startStudy(); });
-    backBtn.addEventListener("click", showIntro);
+    function advance(){
+      if(!pending)return;pending=false;
+      state.serial++;
+      if(state.wrongInRow===0){state.inUnit++;if(state.inUnit>=requiredPerUnit){state.unit++;state.inUnit=0}}
+      state.wrongInRow=0;save();render();
+      // Focus first button on desktop only, don't force scroll on mobile.
+    }
+    function answer(selected,clicked){
+      if(pending)return;
+      pending=true;const right=selected===active.answer;state.attempt++;
+      if(right){state.correct++;state.streak++;state.wrongInRow=0}else{state.streak=0;state.wrongInRow=1}
+      save();updateScore();
+      el.choicesBox.querySelectorAll('button').forEach(b=>{b.disabled=true;if(b.textContent===fmt(active.answer))b.classList.add('correct')});
+      if(!right)clicked.classList.add('wrong');
+      el.feedbackBox.className='feedback '+(right?'good':'bad');
+      el.feedbackBox.textContent=(right?'⭕ 正解！':'💡 おしい！ 正解は '+fmt(active.answer)+'。')+'\n'+active.why;
+      el.nextBtn.textContent=right?'次の問題へ →':'解説を読んで類題へ →';
+      el.nextBtn.classList.remove('hide');el.nextBtn.onclick=advance;
+      // 正解後はボタンが見つからなくても自動で進める。
+      // 誤答では解説を読むため自動進行しない。
+      if(right)setTimeout(()=>{if(pending)advance()},1700);
+    }
+    function start(){sections.intro.classList.add('hide');sections.study.classList.remove('hide');render();window.scrollTo(0,0)}
+    el.startBtn.onclick=start;
+    el.backBtn.onclick=()=>{pending=false;showIntro()};
+    window.manabiStart=start;
+    window.addEventListener('error',function(){
+      // エラーが起きたら娘さんが見える形で伝え、再試行できるようにする。
+      if(!sections.study.classList.contains('hide')){
+        el.nextBtn.classList.remove('hide');el.nextBtn.textContent='問題を再表示する';el.nextBtn.onclick=render;
+      }
+    });
     showIntro();
   })();
   </script>
