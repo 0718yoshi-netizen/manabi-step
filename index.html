@@ -238,7 +238,7 @@
       <button id="testConnection" class="btn btn-sub" type="button" style="margin-top:10px;width:100%">接続テストを1件送る</button>
       <p id="pairStatus" class="small" role="status" aria-live="polite"></p>
     </details>
-    <p class="foot">※ 正解すると自動で次へ進むよ。間違えたら解説を読んで「類題へ」を押してね。 このページはブラウザに学習記録を保存します。別の端末では引き継がれません。</p>
+    <p class="foot">※ 正解・不正解どちらも、解説をゆっくり読んでから「次の問題へ」を押してね。学習記録はこのブラウザ内に保存され、別の端末には自動では引き継がれません。</p>
   </main>
 
   <script>
@@ -629,9 +629,7 @@
       showExplanation(right,selected,active,active.unit,active.serial);
       el.nextBtn.textContent=right?(review.active?'次の復習問題へ →':'次の問題へ →'):(review.active?'別の数字で再挑戦 →':'解説を読んで類題へ →');
       el.nextBtn.classList.remove('hide');el.nextBtn.onclick=advance;
-      // 途中式を読めるよう、正解後も60秒待つ。ボタンならすぐ次へ進める。
-      // 前の問題のタイマーが新しい問題を進めないよう、render/advanceで必ず解除する。
-      if(right)autoTimer=setTimeout(()=>{if(pending)advance()},60000);
+      // 学習者が途中式を読み終えるまで待つ。勝手に次の問題へ進めない。
     }
     function start(){review.active=false;sections.intro.classList.add('hide');sections.study.classList.remove('hide');render();window.scrollTo(0,0)}
     el.startBtn.onclick=start;
