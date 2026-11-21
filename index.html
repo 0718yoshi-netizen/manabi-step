@@ -191,7 +191,7 @@
         </div>
       </div>
       <p id="resumeText" class="small" style="margin-top:12px;"></p>
-      <button id="startBtn" class="btn btn-main">学習をはじめる</button>
+      <button id="startBtn" type="button" class="btn btn-main" onclick="window.manabiStart && window.manabiStart()">学習をはじめる</button><p id="startHelp" class="small" style="margin:12px 0 0">ボタンが動かない場合は、LINEなどのアプリ内ブラウザではなくSafariでこのURLを開いてね。</p>
     </section>
 
     <section id="study" class="hide">
@@ -303,6 +303,12 @@
         state = Object.assign(state, saved);
       }
     } catch (_) {}
+    // 古いバージョンの学習記録で画面が止まらないようにする。
+    state.unit = Number.isInteger(Number(state.unit)) ? Math.min(lessons.length,Math.max(0,Number(state.unit))) : 0;
+    state.variant = Number.isFinite(Number(state.variant)) ? Math.max(0,Number(state.variant)) : 0;
+    state.attempt = Number.isFinite(Number(state.attempt)) ? Math.max(0,Number(state.attempt)) : 0;
+    state.correct = Number.isFinite(Number(state.correct)) ? Math.max(0,Number(state.correct)) : 0;
+    state.streak = Number.isFinite(Number(state.streak)) ? Math.max(0,Number(state.streak)) : 0;
 
     function save() {
       try {
@@ -325,6 +331,8 @@
       study.classList.remove("hide");
       render();
     }
+
+    window.manabiStart = startStudy;
 
     function shuffleLike(options) {
       const arr = options.slice();
@@ -492,7 +500,8 @@
       }
     }
 
-    startBtn.addEventListener("click", startStudy);
+    // onclick 属性からも呼べるため、アプリ内ブラウザで二重実行しない。
+    startBtn.addEventListener("click", function(){ if(study.classList.contains("hide")) startStudy(); });
     backBtn.addEventListener("click", showIntro);
     showIntro();
   })();
