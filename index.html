@@ -136,6 +136,8 @@
     .kpi .box{background:#fff7fb;border:1px solid #f4dce8;border-radius:18px;padding:12px;text-align:center}
     .kpi .num{font-size:20px;font-weight:800}
     .kpi .lab{font-size:12px;color:var(--muted);margin-top:2px}
+    .explanation-step{font-size:17px;font-weight:600;line-height:1.9;background:#fff;padding:10px 12px;border-radius:12px;margin:8px 0;white-space:pre-wrap;overflow-wrap:anywhere}
+    .explanation-note{font-size:13px;margin:10px 0 0;line-height:1.8}
     .foot{margin-top:14px;font-size:12px;line-height:1.8;color:var(--muted);text-align:center}
     .motiv{margin-top:12px;background:linear-gradient(135deg,#fff8cf,#fff2dd);border:1px solid #f2de8f;border-radius:18px;padding:12px 14px;font-size:14px;font-weight:700}
 
@@ -249,7 +251,8 @@
     const titles=['正の数と負の数・加法','正の数と負の数・減法','正負の数の乗法','正負の数の除法','文字式の整理','文字式の代入','方程式の基礎','方程式の移項','比例と反比例','連立方程式の基礎','平方根','展開・因数分解'];
     const messages=['🌸 1問ずつ進めよう！','🍀 間違いは成長のヒントだよ。','💗 自分のペースで大丈夫。'];
     const initial=()=>({unit:0,inUnit:0,attempt:0,correct:0,streak:0,serial:0,wrongInRow:0});
-    let state=initial(),active=null,pending=false;
+    let state=initial(),active=null,pending=false,autoTimer=null;
+    function stopAuto(){if(autoTimer){clearTimeout(autoTimer);autoTimer=null}}
     let questionShownAt=Date.now();
     const key='manabi-step-progress-v3';
     try{
@@ -386,7 +389,7 @@
         case 8:q=`y = ${a}x のとき、x = ${x} なら y は？`;ans=a*x;why=`xに${x}を代入して${a}×${x}だよ。`;d=[a+x,a*x+b,x];break;
         case 9:q=`x + y = ${x+b}、x − y = ${x-b} の x は？`;ans=x;why='2つの式を足すと2xになり、yが消えるよ。';d=[b,x+b,x-b];break;
         case 10:q=`√${a*a} = ?`;ans=a;why=`${a}×${a}=${a*a}。√は正の平方根を表すよ。`;d=[a*a,-a,a+1];break;
-        case 11:q=`(x + ${a})(x + ${b}) の x の係数は？`;ans=a+b;why=`展開するとx²+${a+b}x+${a*b}。`;d=[a*b,a+b+1,a];break;
+        case 11:q=`(x + ${a})(x + ${b}) を広げたとき、xが1つだけつく部分の数字は？`;ans=a+b;why=`展開するとx²+${a+b}x+${a*b}。`;d=[a*b,a+b+1,a];break;
       }
       const answer=String(ans);const options=[answer];
       for(const v of d){let st=String(v);if(!options.includes(st))options.push(st)}
@@ -398,7 +401,118 @@
       })};
     }
     function updateScore(){el.scoreCorrect.textContent=state.correct;el.scoreAttempt.textContent=state.attempt;el.scoreStreak.textContent=state.streak}
-    function render(){pending=false;updateScore();el.feedbackBox.className='feedback hide';el.nextBtn.classList.add('hide');el.choicesBox.replaceChildren();
+
+    // 最後の答えだけでなく、考え方と途中の式を一行ずつ見せる。
+    function explanationFor(u,k) {
+      const a=2+(k*7)%13,b=2+(k*5+3)%11,x=2+(k*11)%9;
+      const F=fmt;
+      switch(u){
+        case 0: return [
+          '① マイナスの'+a+'から、プラス方向に'+(a+b)+'進むよ。',
+          '② '+F(-a)+' + '+(a+b)+' = '+F(-a)+' + '+a+' + '+b,
+          '③ '+F(-a)+' + '+a+' = 0 だから、0 + '+b+' = '+b,
+          '答え：'+b
+        ];
+        case 1:return [
+          '① '+a+'から'+(a+b)+'を引くよ。引く数の方が'+b+'大きいね。',
+          '② '+a+' − '+(a+b)+' = '+a+' − '+a+' − '+b,
+          '③ '+a+' − '+a+' = 0 なので、0 − '+b+' = '+F(-b),
+          '答え：'+F(-b)
+        ];
+        case 2:return [
+          '① まずマイナスを考えずに、数字だけかけよう。',
+          '② '+a+' × '+b+' = '+(a*b),
+          '③ マイナスの数とプラスの数をかけたので、答えはマイナスになるよ。',
+          '答え：'+F(-a*b)
+        ];
+        case 3:return [
+          '① まず数字だけでわり算をしよう。',
+          '② '+(a*b)+' ÷ '+a+' = '+b,
+          '③ プラスの数をマイナスの数でわると、答えはマイナスになるよ。',
+          '答え：'+F(-b)
+        ];
+        case 4:return [
+          '① '+a+'x は「xが'+a+'個」、'+b+'x は「xが'+b+'個」ということだよ。',
+          '② xを合わせると、'+a+'個 + '+b+'個 = '+(a+b)+'個。',
+          '③ '+a+'x + '+b+'x = ('+a+' + '+b+')x = '+(a+b)+'x',
+          '答え：'+(a+b)+'x'
+        ];
+        case 5:return [
+          '① x に '+x+' を入れて計算するよ。',
+          '② '+a+'x + '+b+' = '+a+' × '+x+' + '+b,
+          '③ '+a+' × '+x+' = '+(a*x),
+          '④ '+(a*x)+' + '+b+' = '+(a*x+b),
+          '答え：'+(a*x+b)
+        ];
+        case 6:return [
+          '① '+a+'x は「xを'+a+'倍したもの」だよ。',
+          '② '+a+'x = '+(a*x),
+          '③ x を1個分に戻すため、両方を'+a+'でわるよ。',
+          '④ x = '+(a*x)+' ÷ '+a+' = '+x,
+          '答え：'+x
+        ];
+        case 7:return [
+          '① x を1個分にするため、まず両方から'+b+'を引くよ。',
+          '② '+a+'x + '+b+' − '+b+' = '+(a*x+b)+' − '+b,
+          '③ '+a+'x = '+(a*x),
+          '④ 両方を'+a+'でわると、x = '+(a*x)+' ÷ '+a+' = '+x,
+          '答え：'+x
+        ];
+        case 8:return [
+          '① x のところに '+x+' を入れよう。',
+          '② y = '+a+' × x',
+          '③ y = '+a+' × '+x,
+          '④ y = '+(a*x),
+          '答え：'+(a*x)
+        ];
+        case 9:return [
+          '① 2つの式を、そのまま足してみよう。',
+          '② (x + y) + (x − y) = '+(x+b)+' + ('+F(x-b)+')',
+          '③ +y と −y は合わせると0。だから xが2個残るよ。',
+          '④ 2x = '+(2*x),
+          '⑤ x = '+(2*x)+' ÷ 2 = '+x,
+          '答え：'+x
+        ];
+        case 10:return [
+          '① √'+(a*a)+' は「何と何をかけたら'+(a*a)+'になる？」という意味だよ。',
+          '② '+a+' × '+a+' = '+(a*a),
+          '③ √の答えは0以上の数を選ぶので、'+a+'になるよ。',
+          '答え：'+a
+        ];
+        case 11:return [
+          '① (x + '+a+')(x + '+b+') の4つの組み合わせをかけるよ。',
+          '② x × x + x × '+b+' + '+a+' × x + '+a+' × '+b,
+          '③ = x² + '+b+'x + '+a+'x + '+(a*b),
+          '④ = x² + '+(a+b)+'x + '+(a*b),
+          '⑤ xが1つだけつく部分は '+(a+b)+'x。数字は '+(a+b)+' だよ。',
+          '答え：'+(a+b)
+        ];
+        default:return ['答えまでの式をもう一度確かめよう。'];
+      }
+    }
+    function showExplanation(right, selected, q, unit, serial) {
+      const feedback=el.feedbackBox;
+      feedback.className='feedback '+(right?'good':'bad');
+      feedback.replaceChildren();
+      const head=document.createElement('div');
+      head.style.fontWeight='800';
+      head.style.marginBottom='10px';
+      head.textContent=right?'⭕ 正解！ 一緒にやり方を確かめよう。':'💡 ここから一緒にやろう。答えは '+fmt(q.answer)+' だよ。';
+      feedback.append(head);
+      for(const step of explanationFor(unit,serial)) {
+        const p=document.createElement('p');
+        p.className='explanation-step';
+        p.textContent=step;
+        feedback.append(p);
+      }
+      const note=document.createElement('p');
+      note.className='explanation-note';
+      note.textContent='わからない行があったら、その行だけをゆっくり読んでみよう。';
+      feedback.append(note);
+    }
+
+    function render(){
+      stopAuto();pending=false;updateScore();el.feedbackBox.className='feedback hide';el.nextBtn.classList.add('hide');el.choicesBox.replaceChildren();
       if(state.unit>=totalUnits){
         el.unitTitle.textContent='🎉 全単元クリア';el.counter.textContent='完了';el.progressBar.style.width='100%';
         el.questionBox.textContent='60問クリア！おつかれさま 💗';
@@ -418,7 +532,7 @@
       }
     }
     function advance(){
-      if(!pending)return;pending=false;
+      if(!pending)return;stopAuto();pending=false;
       state.serial++;
       if(state.wrongInRow===0){state.inUnit++;if(state.inUnit>=requiredPerUnit){state.unit++;state.inUnit=0}}
       state.wrongInRow=0;save();render();
@@ -431,17 +545,16 @@
       save();updateScore();logAnswer(selected,right);
       el.choicesBox.querySelectorAll('button').forEach(b=>{b.disabled=true;if(b.textContent===fmt(active.answer))b.classList.add('correct')});
       if(!right)clicked.classList.add('wrong');
-      el.feedbackBox.className='feedback '+(right?'good':'bad');
-      el.feedbackBox.textContent=(right?'⭕ 正解！':'💡 おしい！ 正解は '+fmt(active.answer)+'。')+'\n'+active.why;
+      showExplanation(right,selected,active,state.unit,state.serial);
       el.nextBtn.textContent=right?'次の問題へ →':'解説を読んで類題へ →';
       el.nextBtn.classList.remove('hide');el.nextBtn.onclick=advance;
-      // 正解後はボタンが見つからなくても自動で進める。
-      // 誤答では解説を読むため自動進行しない。
-      if(right)setTimeout(()=>{if(pending)advance()},1700);
+      // 途中式を読めるよう、正解後も60秒待つ。ボタンならすぐ次へ進める。
+      // 前の問題のタイマーが新しい問題を進めないよう、render/advanceで必ず解除する。
+      if(right)autoTimer=setTimeout(()=>{if(pending)advance()},60000);
     }
     function start(){sections.intro.classList.add('hide');sections.study.classList.remove('hide');render();window.scrollTo(0,0)}
     el.startBtn.onclick=start;
-    el.backBtn.onclick=()=>{pending=false;showIntro()};
+    el.backBtn.onclick=()=>{stopAuto();pending=false;showIntro()};
     window.manabiStart=start;
     window.addEventListener('error',function(){
       // エラーが起きたら娘さんが見える形で伝え、再試行できるようにする。
