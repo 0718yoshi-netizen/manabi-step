@@ -193,7 +193,9 @@
         </div>
       </div>
       <p id="resumeText" class="small" style="margin-top:12px;"></p>
-      <button id="startBtn" class="btn btn-main">学習をはじめる</button>
+      <button id="startBtn" class="btn btn-main">60問コースを学習する</button>
+      <button id="reviewBtn" type="button" class="btn btn-sub" style="width:100%;margin-top:12px;background:#fff3f9">🎯 苦手なところを10問復習</button>
+      <p id="reviewSummary" class="small" style="margin-top:8px"></p>
       <button id="exportBtn" type="button" class="btn btn-sub" style="margin-top:12px;width:100%">学習記録をCSVで保存（保護者用）</button>
       <p id="syncStatus" class="small" style="margin-top:10px" aria-live="polite"></p>
     </section>
@@ -252,6 +254,17 @@
     const messages=['🌸 1問ずつ進めよう！','🍀 間違いは成長のヒントだよ。','💗 自分のペースで大丈夫。'];
     const initial=()=>({unit:0,inUnit:0,attempt:0,correct:0,streak:0,serial:0,wrongInRow:0});
     let state=initial(),active=null,pending=false,autoTimer=null;
+    const reviewKey='manabi-step-review-progress-v1';
+    const reviewInitial=()=>({active:false,done:0,attempts:0,correct:0,streak:0,retryUnit:-1,unit:0,lastRight:true});
+    let review=reviewInitial();
+    try {const saved=JSON.parse(localStorage.getItem(reviewKey));
+      if(saved && Number.isInteger(saved.done) && saved.done>=0 && saved.done<=10 &&
+          Number.isInteger(saved.correct) && saved.correct>=0 && saved.correct<=500 &&
+          Number.isInteger(saved.attempts) && saved.attempts>=0 && saved.attempts<=500){
+        review={...reviewInitial(),...saved,active:false};
+      }
+    }catch(e){}
+    function saveReview(){try{localStorage.setItem(reviewKey,JSON.stringify(review))}catch(e){}}
     function stopAuto(){if(autoTimer){clearTimeout(autoTimer);autoTimer=null}}
     let questionShownAt=Date.now();
     const key='manabi-step-progress-v3';
@@ -287,11 +300,11 @@
       if(e)e.textContent=(endpoint&&syncKey)?('端末内 '+history.length+'件記録 / 送信待ち '+outbox.length+'件'):
         ('端末内に '+history.length+'件記録済み（保護者用集計は接続準備中）');
     }
-    function logAnswer(selected,correct){
-      const event={id:randId(),time:new Date().toISOString(),session:sessionId,unit:state.unit+1,
-        unitTitle:titles[state.unit],number:state.unit*requiredPerUnit+state.inUnit+1,
+    function logAnswer(selected,correct,unitNo=state.unit,questionNo=null,logVersion='v4'){
+      const event={id:randId(),time:new Date().toISOString(),session:sessionId,unit:unitNo+1,
+        unitTitle:titles[unitNo],number:questionNo===null?unitNo*requiredPerUnit+state.inUnit+1:questionNo,
         question:active.q,selected:fmt(selected),answer:fmt(active.answer),correct:!!correct,
-        seconds:Math.max(0,Math.round((Date.now()-questionShownAt)/1000)),version:'v4'};
+        seconds:Math.max(0,Math.round((Date.now()-questionShownAt)/1000)),version:logVersion};
       history.push(event);outbox.push(event);
       if(history.length>3000)history=history.slice(-3000);
       if(outbox.length>3000)outbox=outbox.slice(-3000);
@@ -370,7 +383,39 @@
     setSyncStatus();
     if(endpoint&&syncKey)setTimeout(syncBatch,1500);
 
+    function rankWeakUnits(){
+      const stats=Array.from({length:totalUnits},()=>({seen:0,wrong:0}));
+      // 同じ端末に残っている履歴だけを使用し、接続テストは対象外にする。
+      for(const e of history){
+        const u=Number(e.unit)-1;
+        if(!Number.isInteger(u)||u<0||u>=totalUnits||typeof e.correct!=='boolean')continue;
+        stats[u].seen++;
+        if(!e.correct)stats[u].wrong++;
+      }
+      const weak=stats.map((t,i)=>({u:i,score:t.wrong*3+(t.seen?t.wrong/t.seen*2:0),wrong:t.wrong}))
+        .filter(t=>t.wrong>0).sort((a,b)=>b.score-a.score||b.wrong-a.wrong||a.u-b.u);
+      return weak.map(x=>x.u);
+    }
+    function reviewUnitAt(index){
+      if(review.retryUnit>=0&&review.retryUnit<totalUnits)return review.retryUnit;
+      const weak=rankWeakUnits();
+      if(!weak.length)return 0;
+      if(weak.length===1)return weak[0];
+      if(weak.length===2)return weak[[0,1,0,0,1,0,0,1,0,1][index%10]];
+      return weak[[0,1,0,2,0,1,0,2,0,1][index%10]];
+    }
+    function startReview(restart=false){
+      if(restart||review.done>=10)review=reviewInitial();
+      review.active=true;saveReview();
+      sections.intro.classList.add('hide');sections.study.classList.remove('hide');
+      render();window.scrollTo(0,0);
+    }
     function showIntro(){ sections.intro.classList.remove('hide');sections.study.classList.add('hide');
+      const weak=rankWeakUnits();
+      const suffix=(review.done>0&&review.done<10)?'（前回の復習 '+review.done+'/10問から再開）':'';
+      $('reviewSummary').textContent=weak.length?
+        '苦手の候補：「'+titles[weak[0]]+'」から優先して練習するよ。'+suffix:
+        'まだ苦手の記録が少ないので、まずは基礎から練習するよ。'+suffix;
       el.resumeText.textContent=state.unit>=totalUnits?'全12単元を完了！もう一度復習できるよ。':`前回のつづき：${titles[state.unit]}（${state.inUnit+1}/${requiredPerUnit}問）`;
     }
     function fmt(x){return String(x).replace(/-/g,'−')}
@@ -400,7 +445,11 @@
         return h(one)-h(two);
       })};
     }
-    function updateScore(){el.scoreCorrect.textContent=state.correct;el.scoreAttempt.textContent=state.attempt;el.scoreStreak.textContent=state.streak}
+    function updateScore(){
+      el.scoreCorrect.textContent=review.active?review.correct:state.correct;
+      el.scoreAttempt.textContent=review.active?review.attempts:state.attempt;
+      el.scoreStreak.textContent=review.active?review.streak:state.streak;
+    }
 
     // 最後の答えだけでなく、考え方と途中の式を一行ずつ見せる。
     function explanationFor(u,k) {
@@ -513,19 +562,35 @@
 
     function render(){
       stopAuto();pending=false;updateScore();el.feedbackBox.className='feedback hide';el.nextBtn.classList.add('hide');el.choicesBox.replaceChildren();
-      if(state.unit>=totalUnits){
+      if(review.active&&review.done>=10){
+        el.unitTitle.textContent='🎉 10問復習おわり！';el.counter.textContent='完了';el.progressBar.style.width='100%';
+        el.questionBox.textContent='10問がんばったね！ 💗';
+        el.feedbackBox.textContent='正解は'+review.correct+'問。間違えたところは、次の復習で少しずつできるようにしよう。';
+        el.feedbackBox.className='feedback good';
+        el.nextBtn.textContent='もう一度10問復習する';el.nextBtn.classList.remove('hide');
+        el.nextBtn.onclick=()=>startReview(true);return;
+      }
+      if(!review.active&&state.unit>=totalUnits){
         el.unitTitle.textContent='🎉 全単元クリア';el.counter.textContent='完了';el.progressBar.style.width='100%';
         el.questionBox.textContent='60問クリア！おつかれさま 💗';
         el.feedbackBox.textContent='中学数学の基礎12単元を最後まで取り組んだよ。もう一度復習しよう。';el.feedbackBox.className='feedback good';
         el.nextBtn.textContent='最初からもう一度';el.nextBtn.classList.remove('hide');
         el.nextBtn.onclick=()=>{state=initial();save();render()};return;
       }
-      const u=state.unit;
-      el.unitTitle.textContent=`📖 ${titles[u]}`;
-      el.counter.textContent=`単元${u+1}/${totalUnits} ・ ${state.inUnit+1}/${requiredPerUnit}問`;
-      el.progressBar.style.width=`${Math.round(((u*requiredPerUnit+state.inUnit)/(totalUnits*requiredPerUnit))*100)}%`;
-      active=makeQuestion(u,state.serial);questionShownAt=Date.now();
-      el.questionBox.textContent=active.q;el.motivText.textContent=messages[state.serial%messages.length];
+      const u=review.active?reviewUnitAt(review.done):state.unit;
+      const serial=review.active?(state.serial+109+review.done*17+review.attempts*11):state.serial;
+      if(review.active){
+        review.unit=u;
+        el.unitTitle.textContent='🎯 復習：'+titles[u];
+        el.counter.textContent='復習 '+(review.done+1)+' / 10問';
+        el.progressBar.style.width=(review.done*10)+'%';
+      }else{
+        el.unitTitle.textContent=`📖 ${titles[u]}`;
+        el.counter.textContent=`単元${u+1}/${totalUnits} ・ ${state.inUnit+1}/${requiredPerUnit}問`;
+        el.progressBar.style.width=`${Math.round(((u*requiredPerUnit+state.inUnit)/(totalUnits*requiredPerUnit))*100)}%`;
+      }
+      active=makeQuestion(u,serial);active.unit=u;active.serial=serial;questionShownAt=Date.now();
+      el.questionBox.textContent=active.q;el.motivText.textContent=messages[serial%messages.length];
       for(const opt of active.options){
         const button=document.createElement('button');button.type='button';button.className='choice';button.textContent=fmt(opt);
         button.addEventListener('click',()=>answer(opt,button),{once:true});el.choicesBox.append(button);
@@ -533,6 +598,11 @@
     }
     function advance(){
       if(!pending)return;stopAuto();pending=false;
+      if(review.active){
+        review.done++;
+        review.retryUnit=review.lastRight?-1:review.unit;
+        saveReview();render();return;
+      }
       state.serial++;
       if(state.wrongInRow===0){state.inUnit++;if(state.inUnit>=requiredPerUnit){state.unit++;state.inUnit=0}}
       state.wrongInRow=0;save();render();
@@ -540,21 +610,33 @@
     }
     function answer(selected,clicked){
       if(pending)return;
-      pending=true;const right=selected===active.answer;state.attempt++;
-      if(right){state.correct++;state.streak++;state.wrongInRow=0}else{state.streak=0;state.wrongInRow=1}
-      save();updateScore();logAnswer(selected,right);
+      pending=true;const right=selected===active.answer;
+      if(review.active){
+        review.attempts++;
+        review.lastRight=right;
+        if(right){review.correct++;review.streak++}else{review.streak=0}
+        saveReview();
+        logAnswer(selected,right,active.unit,active.unit*requiredPerUnit+(review.done%requiredPerUnit)+1,'v4-review');
+      }else{
+        state.attempt++;
+        if(right){state.correct++;state.streak++;state.wrongInRow=0}else{state.streak=0;state.wrongInRow=1}
+        save();
+        logAnswer(selected,right);
+      }
+      updateScore();
       el.choicesBox.querySelectorAll('button').forEach(b=>{b.disabled=true;if(b.textContent===fmt(active.answer))b.classList.add('correct')});
       if(!right)clicked.classList.add('wrong');
-      showExplanation(right,selected,active,state.unit,state.serial);
-      el.nextBtn.textContent=right?'次の問題へ →':'解説を読んで類題へ →';
+      showExplanation(right,selected,active,active.unit,active.serial);
+      el.nextBtn.textContent=right?(review.active?'次の復習問題へ →':'次の問題へ →'):(review.active?'別の数字で再挑戦 →':'解説を読んで類題へ →');
       el.nextBtn.classList.remove('hide');el.nextBtn.onclick=advance;
       // 途中式を読めるよう、正解後も60秒待つ。ボタンならすぐ次へ進める。
       // 前の問題のタイマーが新しい問題を進めないよう、render/advanceで必ず解除する。
       if(right)autoTimer=setTimeout(()=>{if(pending)advance()},60000);
     }
-    function start(){sections.intro.classList.add('hide');sections.study.classList.remove('hide');render();window.scrollTo(0,0)}
+    function start(){review.active=false;sections.intro.classList.add('hide');sections.study.classList.remove('hide');render();window.scrollTo(0,0)}
     el.startBtn.onclick=start;
-    el.backBtn.onclick=()=>{stopAuto();pending=false;showIntro()};
+    $('reviewBtn').onclick=()=>startReview(false);
+    el.backBtn.onclick=()=>{stopAuto();pending=false;review.active=false;saveReview();showIntro()};
     window.manabiStart=start;
     window.addEventListener('error',function(){
       // エラーが起きたら娘さんが見える形で伝え、再試行できるようにする。
