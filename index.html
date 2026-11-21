@@ -192,6 +192,8 @@
       </div>
       <p id="resumeText" class="small" style="margin-top:12px;"></p>
       <button id="startBtn" class="btn btn-main">学習をはじめる</button>
+      <button id="exportBtn" type="button" class="btn btn-sub" style="margin-top:12px;width:100%">学習記録をCSVで保存（保護者用）</button>
+      <p id="syncStatus" class="small" style="margin-top:10px" aria-live="polite"></p>
     </section>
 
     <section id="study" class="hide">
@@ -225,6 +227,7 @@
   </main>
 
   <script>
+  window.MANABI_LOG_ENDPOINT = ""; // Apps Script URL is configured after deployment
   (function(){
     'use strict';
     const $=id=>document.getElementById(id);
@@ -236,6 +239,7 @@
     const messages=['🌸 1問ずつ進めよう！','🍀 間違いは成長のヒントだよ。','💗 自分のペースで大丈夫。'];
     const initial=()=>({unit:0,inUnit:0,attempt:0,correct:0,streak:0,serial:0,wrongInRow:0});
     let state=initial(),active=null,pending=false;
+    let questionShownAt=Date.now();
     const key='manabi-step-progress-v3';
     try{
       const saved=JSON.parse(localStorage.getItem(key));
@@ -247,6 +251,81 @@
     }catch(e){}
     if(state.unit>totalUnits)state=initial();
     function save(){try{localStorage.setItem(key,JSON.stringify(state))}catch(e){}}
+
+    // 回答はまず端末に保存し、送信失敗でも学習を止めない。
+    const historyKey='manabi-step-history-v1',queueKey='manabi-step-queue-v1';
+    const endpoint=String(window.MANABI_LOG_ENDPOINT||'').trim();
+    function loadArr(k){try{const a=JSON.parse(localStorage.getItem(k)||'[]');return Array.isArray(a)?a:[]}catch(e){return []}}
+    let history=loadArr(historyKey),outbox=loadArr(queueKey),syncRunning=false;
+    let sessionId;
+    try{sessionId=sessionStorage.getItem('manabi-session-v1');
+      if(!sessionId){sessionId='s'+Date.now().toString(36)+Math.random().toString(36).slice(2,10);sessionStorage.setItem('manabi-session-v1',sessionId)}
+    }catch(e){sessionId='s'+Date.now().toString(36)}
+    const randId=()=>Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,12);
+    function saveLog(){try{localStorage.setItem(historyKey,JSON.stringify(history));localStorage.setItem(queueKey,JSON.stringify(outbox));return true}catch(e){return false}}
+    function setSyncStatus(){
+      const e=$('syncStatus');
+      if(e)e.textContent=endpoint?('端末内 '+history.length+'件記録 / 送信待ち '+outbox.length+'件'):
+        ('端末内に '+history.length+'件記録済み（保護者用集計は接続準備中）');
+    }
+    function logAnswer(selected,correct){
+      const event={id:randId(),time:new Date().toISOString(),session:sessionId,unit:state.unit+1,
+        unitTitle:titles[state.unit],number:state.unit*requiredPerUnit+state.inUnit+1,
+        question:active.q,selected:fmt(selected),answer:fmt(active.answer),correct:!!correct,
+        seconds:Math.max(0,Math.round((Date.now()-questionShownAt)/1000)),version:'v4'};
+      history.push(event);outbox.push(event);
+      if(history.length>3000)history=history.slice(-3000);
+      if(outbox.length>3000)outbox=outbox.slice(-3000);
+      if(!saveLog()){const e=$('syncStatus');if(e)e.textContent='記録を保存できませんでした。端末の空き容量を確認してください。'}
+      else setSyncStatus();
+      if(endpoint)setTimeout(syncBatch,1800);
+    }
+    function jsonpStatus(batch){
+      return new Promise(resolve=>{
+        const fn='__manabi_ack_'+Math.random().toString(36).slice(2,12);
+        let finished=false;
+        const script=document.createElement('script');
+        const finish=ok=>{if(finished)return;finished=true;delete window[fn];script.remove();clearTimeout(to);resolve(!!ok)};
+        const to=setTimeout(()=>finish(false),9000);
+        window[fn]=res=>finish(res&&res.ok===true);
+        script.onerror=()=>finish(false);
+        script.src=endpoint+'?action=status&batch='+encodeURIComponent(batch)+'&callback='+fn+'&_='+Date.now();
+        document.head.appendChild(script);
+      });
+    }
+    async function syncBatch(){
+      if(!endpoint||syncRunning||!outbox.length||typeof fetch!=='function')return;
+      syncRunning=true;
+      const items=outbox.slice(0,12);
+      const batch=items[0].id+'__'+items[items.length-1].id;
+      try{
+        // Apps Script はCORS応答ヘッダーを指定できないため、POSTはno-cors。
+        // 書き込み確認後にだけ送信待ちリストを消す。
+        await fetch(endpoint,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=UTF-8'},
+          body:JSON.stringify({batch,events:items})});
+        if(await jsonpStatus(batch)){
+          const sent=new Set(items.map(x=>x.id));
+          outbox=outbox.filter(x=>!sent.has(x.id));saveLog();
+        }
+      }catch(e){}finally{syncRunning=false;setSyncStatus();if(outbox.length>0&&endpoint)setTimeout(syncBatch,20000)}
+    }
+    function csvEscape(v){return '"'+String(v==null?'':v).replace(/"/g,'""')+'"'}
+    function exportCsv(){
+      const fields=['time','unit','unitTitle','number','question','selected','answer','correct','seconds'];
+      const rows=[['日時(UTC)','単元番号','単元名','問題番号','問題','回答','正答','正誤','回答秒数'],
+        ...history.map(e=>fields.map(k=>k==='correct'?(e[k]?'正解':'不正解'):e[k]))];
+      const csv='\ufeff'+rows.map(r=>r.map(csvEscape).join(',')).join('\r\n');
+      const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+      const url=URL.createObjectURL(blob),a=document.createElement('a');
+      a.href=url;a.download='manabi-step-history.csv';document.body.appendChild(a);a.click();a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),3000);
+    }
+    $('exportBtn').onclick=exportCsv;
+    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')syncBatch()});
+    window.addEventListener('online',syncBatch);
+    setSyncStatus();
+    if(endpoint)setTimeout(syncBatch,1500);
+
     function showIntro(){ sections.intro.classList.remove('hide');sections.study.classList.add('hide');
       el.resumeText.textContent=state.unit>=totalUnits?'全12単元を完了！もう一度復習できるよ。':`前回のつづき：${titles[state.unit]}（${state.inUnit+1}/${requiredPerUnit}問）`;
     }
@@ -290,7 +369,7 @@
       el.unitTitle.textContent=`📖 ${titles[u]}`;
       el.counter.textContent=`単元${u+1}/${totalUnits} ・ ${state.inUnit+1}/${requiredPerUnit}問`;
       el.progressBar.style.width=`${Math.round(((u*requiredPerUnit+state.inUnit)/(totalUnits*requiredPerUnit))*100)}%`;
-      active=makeQuestion(u,state.serial);
+      active=makeQuestion(u,state.serial);questionShownAt=Date.now();
       el.questionBox.textContent=active.q;el.motivText.textContent=messages[state.serial%messages.length];
       for(const opt of active.options){
         const button=document.createElement('button');button.type='button';button.className='choice';button.textContent=fmt(opt);
@@ -308,7 +387,7 @@
       if(pending)return;
       pending=true;const right=selected===active.answer;state.attempt++;
       if(right){state.correct++;state.streak++;state.wrongInRow=0}else{state.streak=0;state.wrongInRow=1}
-      save();updateScore();
+      save();updateScore();logAnswer(selected,right);
       el.choicesBox.querySelectorAll('button').forEach(b=>{b.disabled=true;if(b.textContent===fmt(active.answer))b.classList.add('correct')});
       if(!right)clicked.classList.add('wrong');
       el.feedbackBox.className='feedback '+(right?'good':'bad');
