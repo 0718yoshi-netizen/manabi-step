@@ -223,6 +223,17 @@
       </div>
     </section>
 
+    <details id="parentSettings" class="card" style="margin-top:18px">
+      <summary style="cursor:pointer;font-weight:800">🔒 保護者向け：学習記録の自動連携</summary>
+      <p class="small">学習履歴はまずこの端末に保存されます。Googleシートへ送るには、保護者が一度だけ連携設定を行ってください。</p>
+      <label for="scriptUrl" style="display:block;margin-top:10px;font-size:14px">Google Apps Script のウェブアプリURL</label>
+      <input id="scriptUrl" type="url" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off" style="width:100%;padding:12px;border:1px solid #d6c9dc;border-radius:10px;font-size:14px;max-width:100%">
+      <label for="secretKey" style="display:block;margin-top:10px;font-size:14px">非公開の連携キー（スプレッドシートに記載）</label>
+      <input id="secretKey" type="password" placeholder="連携キー" autocomplete="off" style="width:100%;padding:12px;border:1px solid #d6c9dc;border-radius:10px;font-size:14px;max-width:100%">
+      <button id="saveConnection" class="btn btn-main" type="button">連携設定を保存して送信する</button>
+      <button id="testConnection" class="btn btn-sub" type="button" style="margin-top:10px;width:100%">接続テストを1件送る</button>
+      <p id="pairStatus" class="small" role="status" aria-live="polite"></p>
+    </details>
     <p class="foot">※ 正解すると自動で次へ進むよ。間違えたら解説を読んで「類題へ」を押してね。 このページはブラウザに学習記録を保存します。別の端末では引き継がれません。</p>
   </main>
 
@@ -254,7 +265,12 @@
 
     // 回答はまず端末に保存し、送信失敗でも学習を止めない。
     const historyKey='manabi-step-history-v1',queueKey='manabi-step-queue-v1';
-    const endpoint=String(window.MANABI_LOG_ENDPOINT||'').trim();
+    let endpoint='';
+    let syncKey='';
+    try {
+      endpoint=String(localStorage.getItem('manabi-endpoint-v1')||window.MANABI_LOG_ENDPOINT||'').trim();
+      syncKey=String(localStorage.getItem('manabi-sync-key-v1')||'').trim();
+    } catch(e) {}
     function loadArr(k){try{const a=JSON.parse(localStorage.getItem(k)||'[]');return Array.isArray(a)?a:[]}catch(e){return []}}
     let history=loadArr(historyKey),outbox=loadArr(queueKey),syncRunning=false;
     let sessionId;
@@ -265,7 +281,7 @@
     function saveLog(){try{localStorage.setItem(historyKey,JSON.stringify(history));localStorage.setItem(queueKey,JSON.stringify(outbox));return true}catch(e){return false}}
     function setSyncStatus(){
       const e=$('syncStatus');
-      if(e)e.textContent=endpoint?('端末内 '+history.length+'件記録 / 送信待ち '+outbox.length+'件'):
+      if(e)e.textContent=(endpoint&&syncKey)?('端末内 '+history.length+'件記録 / 送信待ち '+outbox.length+'件'):
         ('端末内に '+history.length+'件記録済み（保護者用集計は接続準備中）');
     }
     function logAnswer(selected,correct){
@@ -278,7 +294,7 @@
       if(outbox.length>3000)outbox=outbox.slice(-3000);
       if(!saveLog()){const e=$('syncStatus');if(e)e.textContent='記録を保存できませんでした。端末の空き容量を確認してください。'}
       else setSyncStatus();
-      if(endpoint)setTimeout(syncBatch,1800);
+      if(endpoint&&syncKey)setTimeout(syncBatch,1800);
     }
     function jsonpStatus(batch){
       return new Promise(resolve=>{
@@ -294,7 +310,7 @@
       });
     }
     async function syncBatch(){
-      if(!endpoint||syncRunning||!outbox.length||typeof fetch!=='function')return;
+      if(!endpoint||!syncKey||syncRunning||!outbox.length||typeof fetch!=='function')return;
       syncRunning=true;
       const items=outbox.slice(0,12);
       const batch=items[0].id+'__'+items[items.length-1].id;
@@ -302,12 +318,12 @@
         // Apps Script はCORS応答ヘッダーを指定できないため、POSTはno-cors。
         // 書き込み確認後にだけ送信待ちリストを消す。
         await fetch(endpoint,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=UTF-8'},
-          body:JSON.stringify({batch,events:items})});
+          body:JSON.stringify({batch,events:items,key:syncKey})});
         if(await jsonpStatus(batch)){
           const sent=new Set(items.map(x=>x.id));
           outbox=outbox.filter(x=>!sent.has(x.id));saveLog();
         }
-      }catch(e){}finally{syncRunning=false;setSyncStatus();if(outbox.length>0&&endpoint)setTimeout(syncBatch,20000)}
+      }catch(e){}finally{syncRunning=false;setSyncStatus();if(outbox.length>0&&endpoint&&syncKey)setTimeout(syncBatch,20000)}
     }
     function csvEscape(v){return '"'+String(v==null?'':v).replace(/"/g,'""')+'"'}
     function exportCsv(){
@@ -321,10 +337,35 @@
       setTimeout(()=>URL.revokeObjectURL(url),3000);
     }
     $('exportBtn').onclick=exportCsv;
+    const urlInput=$('scriptUrl'),keyInput=$('secretKey'),pairStatus=$('pairStatus');
+    urlInput.value=endpoint;keyInput.value=syncKey;
+    const validScriptUrl=url=>{
+      try {const u=new URL(url);return u.protocol==='https:'&&u.hostname==='script.google.com'&&
+        /^\/macros\/s\/[a-zA-Z0-9_-]+\/exec$/.test(u.pathname)&&!u.search&&!u.hash}
+      catch(e){return false}
+    };
+    $('saveConnection').onclick=()=>{
+      const u=urlInput.value.trim(),k=keyInput.value.trim();
+      if(!validScriptUrl(u)){pairStatus.textContent='Apps Scriptの「/exec」で終わる公開URLを入力してね。';return}
+      if(k.length<20){pairStatus.textContent='シートの「設定・使い方」タブにある連携キーを入力してね。';return}
+      try {localStorage.setItem('manabi-endpoint-v1',u);localStorage.setItem('manabi-sync-key-v1',k)}
+      catch(e){pairStatus.textContent='連携情報を保存できません。Safariの設定を確認してね。';return}
+      endpoint=u;syncKey=k;pairStatus.textContent='連携情報を保存したよ。未送信の回答があれば順次送信します。';
+      setSyncStatus();syncBatch();
+    };
+    $('testConnection').onclick=()=>{
+      if(!endpoint||!syncKey){pairStatus.textContent='先に連携設定を保存してください。';return}
+      if(outbox.length>=3000){pairStatus.textContent='送信待ちが多いため接続テストできません。';return}
+      outbox.push({id:randId(),time:new Date().toISOString(),session:sessionId,
+        unit:0,unitTitle:'接続テスト',number:0,question:'接続テスト',selected:'テスト',
+        answer:'テスト',correct:true,seconds:0,version:'v4-test'});
+      saveLog();setSyncStatus();pairStatus.textContent='テストデータを送信します。数秒後、スプレッドシートの回答ログを確認してください。';
+      syncBatch();
+    };
     document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')syncBatch()});
     window.addEventListener('online',syncBatch);
     setSyncStatus();
-    if(endpoint)setTimeout(syncBatch,1500);
+    if(endpoint&&syncKey)setTimeout(syncBatch,1500);
 
     function showIntro(){ sections.intro.classList.remove('hide');sections.study.classList.add('hide');
       el.resumeText.textContent=state.unit>=totalUnits?'全12単元を完了！もう一度復習できるよ。':`前回のつづき：${titles[state.unit]}（${state.inUnit+1}/${requiredPerUnit}問）`;
