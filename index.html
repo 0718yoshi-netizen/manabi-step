@@ -147,6 +147,8 @@
     .growth-label{font-size:12px;color:#86768b;margin-top:3px}
     .growth-achievement{background:#fffbea;border-radius:12px;padding:11px;font-size:14px;font-weight:700;line-height:1.7;margin:12px 0 8px}
     .growth-goal{font-size:14px;line-height:1.8;margin:0}
+    .growth-goal-track{height:13px;border-radius:999px;background:#f4e4e9;margin:10px 0;overflow:hidden;border:1px solid #edd0dc}
+    .growth-goal-bar{height:100%;width:0%;background:linear-gradient(90deg,#fd8bb8,#ffc885);border-radius:999px;transition:width .2s ease}
     .growth-footnote{font-size:11px;color:#84778b;line-height:1.65;margin:11px 0 0}
     .coach-panel{margin-top:16px;border:1px solid #d6e7ef;background:#f5fbff;border-radius:20px;padding:15px}
     .coach-line{background:#fff;border-radius:12px;padding:10px 12px;margin:8px 0;line-height:1.8;font-size:14px}
@@ -248,7 +250,8 @@
         </div>
         <p id="growthAchievement" class="growth-achievement"></p>
         <p id="growthGoal" class="growth-goal"></p>
-        <p class="growth-footnote">※ 時間は目安。以前の記録は解答にかけた時間、今後は学習画面で取り組んだ時間を加算するよ。休憩・別アプリを開いている時間は除き、操作のない時間は1回につき最大3分まで数えるよ。</p>
+        <div class="growth-goal-track" role="progressbar" id="growthGoalTrack" aria-label="次の累計解答数の目標まで" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="growthGoalBar" class="growth-goal-bar"></div></div>
+        <p class="growth-footnote">※ この端末に保存された記録だけを集計するよ。学習時間は目安で、以前は解答にかけた時間、今後は問題と解説に取り組んだ時間を記録するよ。休憩・別アプリを開いている時間は含めず、無操作の時間は1回につき最大3分まで数えるよ。</p>
       </section>
       <section class="coach-panel" aria-label="学習アドバイス">
         <h3 id="coachTitle" style="margin:0 0 10px;font-size:18px">あなたへの学習アドバイス</h3>
@@ -655,9 +658,12 @@
       const hours=Math.floor(minutes/60);
       return hours?hours+'時間'+(minutes%60?minutes%60+'分':''):minutes+'分';
     }
-    function nextGoal(n){
+    function nextGoalTarget(n){
       const milestones=[10,30,60,100,200,300,500,1000];
-      const target=milestones.find(v=>n<v)||Math.ceil((n+1)/500)*500;
+      return milestones.find(v=>n<v)||Math.ceil((n+1)/500)*500;
+    }
+    function nextGoal(n){
+      const target=nextGoalTarget(n);
       return '🎯 次の目標：累計'+target+'問まで、あと'+(target-n)+'問。今日は焦らず、自分で考える時間を大事にしよう。';
     }
     function showGrowth(){
@@ -672,6 +678,9 @@
         :st.total>=10?'🌱 続けることが成長の第一歩。'+st.total+'問取り組んだ記録があるよ。'
         :'🌱 1問ずつの積み重ねが、これからの力になるよ。';
       $('growthGoal').textContent=nextGoal(st.total);
+      const percent=Math.min(100,Math.round(100*st.total/nextGoalTarget(st.total)));
+      $('growthGoalBar').style.width=percent+'%';
+      $('growthGoalTrack').setAttribute('aria-valuenow',String(percent));
     }
 
     function coachingAdvice(){
