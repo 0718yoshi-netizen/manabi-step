@@ -138,6 +138,14 @@
     .kpi .lab{font-size:12px;color:var(--muted);margin-top:2px}
     .explanation-step{font-size:17px;font-weight:600;line-height:1.9;background:#fff;padding:10px 12px;border-radius:12px;margin:8px 0;white-space:pre-wrap;overflow-wrap:anywhere}
     .explanation-note{font-size:13px;margin:10px 0 0;line-height:1.8}
+    .course-card{margin-top:14px;border:1px solid #efdce7;background:#fffafe;border-radius:20px;padding:14px}
+    .course-heading{display:flex;align-items:center;gap:12px}
+    .course-heading strong{font-size:18px}
+    .course-heading p{font-size:13px;color:var(--muted);margin:4px 0 0;line-height:1.6}
+    .course-number{display:inline-flex;align-items:center;justify-content:center;background:#ffe2ed;color:#88435d;border-radius:16px;width:48px;height:48px;font-size:24px;font-weight:800;flex:none}
+    .course-progress{font-size:13px;color:var(--text);font-weight:700;margin:12px 0 2px}
+    .course-card .btn-main{margin-top:10px}
+    .pending-course{background:#f9f8fa}
     .foot{margin-top:14px;font-size:12px;line-height:1.8;color:var(--muted);text-align:center}
     .motiv{margin-top:12px;background:linear-gradient(135deg,#fff8cf,#fff2dd);border:1px solid #f2de8f;border-radius:18px;padding:12px 14px;font-size:14px;font-weight:700}
 
@@ -192,8 +200,21 @@
           <span class="small">だいじょうぶ。1問できたら、それはちゃんと前進だよ！</span>
         </div>
       </div>
+      <div class="course-card">
+        <div class="course-heading"><span class="course-number">①</span><div><strong>基礎コース・60問</strong><p>数学の基本ルールを、途中式で学ぶコース</p></div></div>
+        <p id="course1Status" class="course-progress"></p>
+        <button id="startBtn" class="btn btn-main">① 基礎60問を学習する</button>
+      </div>
+      <div class="course-card">
+        <div class="course-heading"><span class="course-number">②</span><div><strong>定着コース・60問</strong><p>数字と出題順を変えて、理解できたか確かめるコース</p></div></div>
+        <p id="course2Status" class="course-progress"></p>
+        <button id="startCourse2Btn" class="btn btn-main">② 定着60問を学習する</button>
+      </div>
+      <div class="course-card pending-course">
+        <div class="course-heading"><span class="course-number">③</span><div><strong>応用コース・準備中</strong><p>文章題など、考え方を組み合わせる問題を今後追加する予定</p></div></div>
+        <button type="button" class="btn btn-sub" disabled aria-disabled="true" style="width:100%;opacity:.7">③ 準備中（まだ受講できません）</button>
+      </div>
       <p id="resumeText" class="small" style="margin-top:12px;"></p>
-      <button id="startBtn" class="btn btn-main">📚 基礎60問コースを学習する</button>
       <button id="reviewBtn" type="button" class="btn btn-sub" style="width:100%;margin-top:12px;background:#fff3f9">🎯 苦手なところを10問復習</button>
       <p id="reviewSummary" class="small" style="margin-top:8px"></p>
       <button id="exportBtn" type="button" class="btn btn-sub" style="margin-top:12px;width:100%">学習記録をCSVで保存（保護者用）</button>
@@ -277,7 +298,37 @@
       }
     }catch(e){}
     if(state.unit>totalUnits)state=initial();
-    function save(){try{localStorage.setItem(key,JSON.stringify(state))}catch(e){}}
+    // ①は従来の保存先をそのまま使用。②は別の保存先で完全に独立。
+    let course1State=state,course2State=initial(),selectedCourse=1;
+    const course2Key='manabi-step-progress-course2-v1',courseSelectKey='manabi-step-selected-course-v1';
+    try {
+      const saved=JSON.parse(localStorage.getItem(course2Key));
+      if(saved&&typeof saved==='object'){
+        for(const f of Object.keys(course2State)){
+          if(Number.isSafeInteger(saved[f])&&saved[f]>=0&&saved[f]<1000000)course2State[f]=saved[f];
+        }
+        if(course2State.unit>totalUnits)course2State=initial();
+      }
+      if(localStorage.getItem(courseSelectKey)==='2'){selectedCourse=2;state=course2State}
+    }catch(e){}
+    function save(){
+      try{localStorage.setItem(selectedCourse===1?key:course2Key,JSON.stringify(state))}
+      catch(e){}
+    }
+    function chooseCourse(n){
+      if(n!==1&&n!==2)return;
+      if(selectedCourse===1)course1State=state;else course2State=state;
+      selectedCourse=n;state=n===1?course1State:course2State;
+      try{localStorage.setItem(courseSelectKey,String(n))}catch(e){}
+    }
+    function storedCourse(n){return n===1?course1State:course2State}
+    function courseStatus(n){
+      const st=storedCourse(n);
+      const passed=Math.min(60,st.unit*requiredPerUnit+st.inUnit);
+      const percent=st.attempt?(Math.round(100*st.correct/st.attempt)+'%'):'未集計';
+      return '進捗 '+passed+'/60問'+(passed===60?' 🎉 完了！':'')+' ・正答率 '+percent+
+        (n===1?'（過去の学習結果を含む）':'');
+    }
 
     // 回答はまず端末に保存し、送信失敗でも学習を止めない。
     const historyKey='manabi-step-history-v1',queueKey='manabi-step-queue-v1';
@@ -300,7 +351,7 @@
       if(e)e.textContent=(endpoint&&syncKey)?('端末内 '+history.length+'件記録 / 送信待ち '+outbox.length+'件'):
         ('端末内に '+history.length+'件記録済み（保護者用集計は接続準備中）');
     }
-    function logAnswer(selected,correct,unitNo=state.unit,questionNo=null,logVersion='v4'){
+    function logAnswer(selected,correct,unitNo=state.unit,questionNo=null,logVersion='v5-c'+selectedCourse){
       const event={id:randId(),time:new Date().toISOString(),session:sessionId,unit:unitNo+1,
         unitTitle:titles[unitNo],number:questionNo===null?unitNo*requiredPerUnit+state.inUnit+1:questionNo,
         question:active.q,selected:fmt(selected),answer:fmt(active.answer),correct:!!correct,
@@ -416,11 +467,21 @@
       $('reviewSummary').textContent=weak.length?
         '苦手の候補：「'+titles[weak[0]]+'」から優先して練習するよ。'+suffix:
         'まだ苦手の記録が少ないので、まずは基礎から練習するよ。'+suffix;
-      el.resumeText.textContent=state.unit>=totalUnits?'全12単元を完了！もう一度復習できるよ。':`前回のつづき：${titles[state.unit]}（${state.inUnit+1}/${requiredPerUnit}問）`;
+      $('course1Status').textContent=courseStatus(1);
+      $('course2Status').textContent=courseStatus(2);
+      el.resumeText.textContent='選んだコースの続きから始められるよ。①と②の学習記録は別々に保存するよ。';
     }
     function fmt(x){return String(x).replace(/-/g,'−')}
     // 基礎60問：12単元×5種類。数字を変えるだけでなく、5つの考え方を練習する。
     // 最初から解き直しても学習ログ・進捗データは消さない。
+    function makeCourseQuestion(u,k,variant,course){
+      // コース①の問題作成方法は固定。②は数字と５つの考え方の順番を変える。
+      if(course===2){
+        const order=[2,4,0,3,1];
+        return makeQuestion(u,k+137+u*17,order[variant%5]);
+      }
+      return makeQuestion(u,k,variant);
+    }
     function makeQuestion(u,k,variant=k%5){
       const a=2+(k*7)%13,b=2+(k*5+3)%11,c=2+(k*3+2)%8,x=2+(k*11)%9;
       const v=((variant%5)+5)%5, F=fmt;
@@ -912,11 +973,14 @@
         el.nextBtn.onclick=()=>startReview(true);return;
       }
       if(!review.active&&state.unit>=totalUnits){
-        el.unitTitle.textContent='🎉 全単元クリア';el.counter.textContent='完了';el.progressBar.style.width='100%';
-        el.questionBox.textContent='60問クリア！おつかれさま 💗';
+        el.unitTitle.textContent='🎉 コース'+(selectedCourse===1?'①':'②')+'完了！';el.counter.textContent='完了';el.progressBar.style.width='100%';
+        el.questionBox.textContent='コース'+(selectedCourse===1?'①':'②')+' 60問クリア！おつかれさま 💗';
         el.feedbackBox.textContent='中学数学の基礎12単元を最後まで取り組んだよ。もう一度復習しよう。';el.feedbackBox.className='feedback good';
         el.nextBtn.textContent='最初からもう一度';el.nextBtn.classList.remove('hide');
-        el.nextBtn.onclick=()=>{state=initial();save();render()};return;
+        el.nextBtn.onclick=()=>{
+          state=initial();if(selectedCourse===1)course1State=state;else course2State=state;
+          save();render();
+        };return;
       }
       const u=review.active?reviewUnitAt(review.done):state.unit;
       const serial=review.active?(state.serial+109+review.done*17+review.attempts*11):state.serial;
@@ -926,11 +990,12 @@
         el.counter.textContent='復習 '+(review.done+1)+' / 10問';
         el.progressBar.style.width=(review.done*10)+'%';
       }else{
-        el.unitTitle.textContent=`📖 ${titles[u]}`;
+        el.unitTitle.textContent=(selectedCourse===1?'① 基礎':'② 定着')+' 📖 '+titles[u];
         el.counter.textContent=`単元${u+1}/${totalUnits} ・ ${state.inUnit+1}/${requiredPerUnit}問`;
         el.progressBar.style.width=`${Math.round(((u*requiredPerUnit+state.inUnit)/(totalUnits*requiredPerUnit))*100)}%`;
       }
-      active=makeQuestion(u,serial,review.active?review.done%5:state.inUnit);active.unit=u;active.serial=serial;questionShownAt=Date.now();
+      active=makeCourseQuestion(u,serial,review.active?review.done%5:state.inUnit,selectedCourse);
+      active.unit=u;active.serial=serial;questionShownAt=Date.now();
       el.questionBox.textContent=active.q;el.motivText.textContent=messages[serial%messages.length];
       for(const opt of active.options){
         const button=document.createElement('button');button.type='button';button.className='choice';button.textContent=fmt(opt);
@@ -957,7 +1022,7 @@
         review.lastRight=right;
         if(right){review.correct++;review.streak++}else{review.streak=0}
         saveReview();
-        logAnswer(selected,right,active.unit,active.unit*requiredPerUnit+(review.done%requiredPerUnit)+1,'v4-review');
+        logAnswer(selected,right,active.unit,active.unit*requiredPerUnit+(review.done%requiredPerUnit)+1,'v5-review-c'+selectedCourse);
       }else{
         state.attempt++;
         if(right){state.correct++;state.streak++;state.wrongInRow=0}else{state.streak=0;state.wrongInRow=1}
@@ -972,8 +1037,13 @@
       el.nextBtn.classList.remove('hide');el.nextBtn.onclick=advance;
       // 学習者が途中式を読み終えるまで待つ。勝手に次の問題へ進めない。
     }
-    function start(){review.active=false;sections.intro.classList.add('hide');sections.study.classList.remove('hide');render();window.scrollTo(0,0)}
-    el.startBtn.onclick=start;
+    function start(n=1){
+      stopAuto();chooseCourse(n);review.active=false;
+      sections.intro.classList.add('hide');sections.study.classList.remove('hide');
+      render();window.scrollTo(0,0);
+    }
+    el.startBtn.onclick=()=>start(1);
+    $('startCourse2Btn').onclick=()=>start(2);
     $('reviewBtn').onclick=()=>startReview(false);
     el.backBtn.onclick=()=>{stopAuto();pending=false;review.active=false;saveReview();showIntro()};
     window.manabiStart=start;
