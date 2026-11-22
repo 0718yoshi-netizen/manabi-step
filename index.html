@@ -510,9 +510,21 @@
       return all;
     }
     function skillTitle(u,v){
-      if(u===11)return ['かっこを広げる','xの数字を見つける','4つをかけて広げる',
-        '共通のxを外へ出す','2つのかっこに戻す'][v];
-      return ['練習①','練習②','練習③','練習④','練習⑤'][v];
+      const subskills=[
+        ['マイナスから足す','マイナスを足す','マイナスどうしを足す','プラスとマイナスを足す','ゼロになる組み合わせ'],
+        ['大きい数を引く','マイナスからさらに引く','マイナスを引く','プラスからマイナスを引く','マイナスどうしを引く'],
+        ['マイナスとプラスをかける','マイナスどうしをかける','プラスとマイナスをかける','ゼロをかける','3つの数をかける'],
+        ['プラスをマイナスで割る','マイナスどうしを割る','マイナスをプラスで割る','基本の割り算','大きい数の割り算'],
+        ['xの数を足す','xの数を引く','xと数字を分ける','xの数をまとめる','xの数を3つまとめる'],
+        ['xに数字を入れる','xに数字を入れて引く','xとyに数字を入れる','xを2回かける','かっこの中を先に計算'],
+        ['かけ算を元に戻す','足した数字を戻す','引いた数字を戻す','割り算を元に戻す','2倍を元に戻す'],
+        ['足してから割る','引いてから割る','左右のxをまとめる','左右から同じ数を引く','かっこを外す前に割る'],
+        ['比例でyを求める','比例でxを求める','反比例でyを求める','反比例でxを求める','マイナスを入れる'],
+        ['2つの式を足してxを求める','2つの式を引いてyを求める','2つの式を引いてxを求める','2つの式を引いてyを求める','式を足して3xを作る'],
+        ['√を数字に直す','大きい√を数字に直す','√の外に数字を出す','√の足し算','√のかけ算'],
+        ['かっこを広げる','xの数字を見つける','4つをかけて広げる','共通のxを外へ出す','2つのかっこに戻す']
+      ];
+      return subskills[u]?.[v]||'考え方を確認する';
     }
     function trainingSummary(){
       const st=learningStats();
@@ -537,8 +549,8 @@
       const eligible=stats.map(st=>{
         let points=0;
         if(st.wrong>0){
-          points=4*(st.wrong/Math.max(1,st.seen))+Math.min(st.wrong,5)*1.2;
-          points+=st.isDue?5:-5;
+          points=8*(st.wrong/Math.max(1,st.seen))+Math.min(st.wrong,4)*0.7;
+          points+=st.isDue?7:-5;
           if(!st.lastCorrect)points+=3;
         }else if(st.seen>0){points=st.isDue?1.5:-4;}
         else{
@@ -1141,7 +1153,7 @@
         el.unitTitle.textContent='🎯 復習：'+titles[u];
         el.counter.textContent='復習 '+(review.done+1)+' / 10問';
         el.progressBar.style.width=(review.done*10)+'%';
-      }else{
+      }else if(!train.active){
         el.unitTitle.textContent=(selectedCourse===1?'① 基礎':'② 定着')+' 📖 '+titles[u];
         el.counter.textContent=`単元${u+1}/${totalUnits} ・ ${state.inUnit+1}/${requiredPerUnit}問`;
         el.progressBar.style.width=`${Math.round(((u*requiredPerUnit+state.inUnit)/(totalUnits*requiredPerUnit))*100)}%`;
