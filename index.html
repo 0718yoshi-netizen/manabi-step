@@ -138,6 +138,16 @@
     .kpi .lab{font-size:12px;color:var(--muted);margin-top:2px}
     .explanation-step{font-size:17px;font-weight:600;line-height:1.9;background:#fff;padding:10px 12px;border-radius:12px;margin:8px 0;white-space:pre-wrap;overflow-wrap:anywhere}
     .explanation-note{font-size:13px;margin:10px 0 0;line-height:1.8}
+    .growth-panel{margin-top:16px;padding:17px 15px;background:linear-gradient(130deg,#fffaf2,#fff5fb);border:2px solid #f3d9be;border-radius:21px}
+    .growth-head{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+    .growth-subtitle{font-size:12px;font-weight:700;color:#a06e80}
+    .growth-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:14px}
+    .growth-metric{background:#fff;padding:14px 10px;border-radius:14px;border:1px solid #f4e3eb;text-align:center}
+    .growth-value{font-size:24px;font-weight:800;color:#705072;line-height:1.45;overflow-wrap:anywhere}
+    .growth-label{font-size:12px;color:#86768b;margin-top:3px}
+    .growth-achievement{background:#fffbea;border-radius:12px;padding:11px;font-size:14px;font-weight:700;line-height:1.7;margin:12px 0 8px}
+    .growth-goal{font-size:14px;line-height:1.8;margin:0}
+    .growth-footnote{font-size:11px;color:#84778b;line-height:1.65;margin:11px 0 0}
     .coach-panel{margin-top:16px;border:1px solid #d6e7ef;background:#f5fbff;border-radius:20px;padding:15px}
     .coach-line{background:#fff;border-radius:12px;padding:10px 12px;margin:8px 0;line-height:1.8;font-size:14px}
     .nickname-area{margin-top:14px;border-top:1px solid #dce8ee;padding-top:10px}
@@ -225,6 +235,21 @@
         <button type="button" class="btn btn-sub" disabled aria-disabled="true" style="width:100%;opacity:.7">③ 準備中（まだ受講できません）</button>
       </div>
       <p id="resumeText" class="small" style="margin-top:12px;"></p>
+      <section class="growth-panel" aria-label="学習の成長記録">
+        <div class="growth-head">
+          <h3 id="growthTitle" style="margin:0;font-size:20px">あなたの成長ノート ✨</h3>
+          <span class="growth-subtitle">学びのあしあと</span>
+        </div>
+        <div class="growth-grid">
+          <div class="growth-metric"><div id="growthTime" class="growth-value">—</div><div class="growth-label">⏳ コツコツ学習時間</div></div>
+          <div class="growth-metric"><div id="growthAnswers" class="growth-value">—</div><div class="growth-label">✏️ 解いた問題</div></div>
+          <div class="growth-metric"><div id="growthDays" class="growth-value">—</div><div class="growth-label">📅 学んだ日数</div></div>
+          <div class="growth-metric"><div id="growthIndependent" class="growth-value">—</div><div class="growth-label">🌟 ヒントなし正解</div></div>
+        </div>
+        <p id="growthAchievement" class="growth-achievement"></p>
+        <p id="growthGoal" class="growth-goal"></p>
+        <p class="growth-footnote">※ 時間は目安。以前の記録は解答にかけた時間、今後は学習画面で取り組んだ時間を加算するよ。休憩・別アプリを開いている時間は除き、操作のない時間は1回につき最大3分まで数えるよ。</p>
+      </section>
       <section class="coach-panel" aria-label="学習アドバイス">
         <h3 id="coachTitle" style="margin:0 0 10px;font-size:18px">あなたへの学習アドバイス</h3>
         <p id="coachStrength" class="coach-line"></p>
@@ -396,6 +421,49 @@
     } catch(e) {}
     function loadArr(k){try{const a=JSON.parse(localStorage.getItem(k)||'[]');return Array.isArray(a)?a:[]}catch(e){return []}}
     let history=loadArr(historyKey),outbox=loadArr(queueKey),syncRunning=false;
+    // コツコツ学習時間：既存の履歴は回答秒数を一度だけ取り込み、
+    // ここからは「問題を見る＋解説を読む」間の学習時間を数える。
+    // 休憩・画面非表示・長い無操作を除くため、1回の計上上限は180秒。
+    const focusKey='manabi-step-focus-time-v1';
+    function oldAnswerSeconds(){
+      return history.reduce((n,e)=>n+Math.max(0,Math.min(180,Number(e.seconds)||0)),0);
+    }
+    let focusData={baselineSeconds:oldAnswerSeconds(),activeSeconds:0};
+    try{
+      const prev=JSON.parse(localStorage.getItem(focusKey)||'null');
+      if(prev&&Number.isFinite(prev.baselineSeconds)&&prev.baselineSeconds>=0&&
+        Number.isFinite(prev.activeSeconds)&&prev.activeSeconds>=0){
+        focusData={baselineSeconds:prev.baselineSeconds,activeSeconds:prev.activeSeconds};
+      }else localStorage.setItem(focusKey,JSON.stringify(focusData));
+    }catch(e){}
+    let focusAnchor=null;
+    function saveFocus(){
+      try{localStorage.setItem(focusKey,JSON.stringify(focusData))}catch(e){}
+    }
+    function accrueFocus(){
+      if(focusAnchor===null)return;
+      const elapsed=(Date.now()-focusAnchor)/1000;
+      if(Number.isFinite(elapsed)&&elapsed>0){
+        focusData.activeSeconds+=Math.min(180,elapsed);
+        saveFocus();
+      }
+      focusAnchor=null;
+    }
+    function resumeFocus(){
+      if(document.visibilityState==='hidden')return;
+      focusAnchor=Date.now();
+    }
+    function totalFocusSeconds(){
+      return Math.round(focusData.baselineSeconds+focusData.activeSeconds);
+    }
+    // 数分以上放置されても、無制限に時間を水増ししない。
+    document.addEventListener('visibilitychange',()=>{
+      if(document.visibilityState==='hidden')accrueFocus();
+      else if(!sections.study.classList.contains('hide')&&active&&
+        el.questionBox.textContent===active.q)resumeFocus();
+    });
+    window.addEventListener('pagehide',accrueFocus);
+
     let sessionId;
     try{sessionId=sessionStorage.getItem('manabi-session-v1');
       if(!sessionId){sessionId='s'+Date.now().toString(36)+Math.random().toString(36).slice(2,10);sessionStorage.setItem('manabi-session-v1',sessionId)}
@@ -560,6 +628,52 @@
       try{return (String(localStorage.getItem(nicknameKey)||'').trim().slice(0,16))||'あなた'}
       catch(e){return 'あなた'}
     }
+
+    function growthData(){
+      const real=history.filter(e=>typeof e.correct==='boolean'&&
+        Number.isInteger(Number(e.unit))&&Number(e.unit)>=1&&Number(e.unit)<=totalUnits&&
+        e.unitTitle!=='接続テスト');
+      const total=real.length;
+      const correct=real.filter(e=>e.correct&&!e.hint).length;
+      const days=new Set();
+      const seenWrong=new Set(),corrected=new Set();
+      for(const e of real){
+        const parsed=new Date(e.time);
+        if(!Number.isNaN(parsed.getTime())){
+          days.add(parsed.toLocaleDateString('ja-JP',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit'}));
+        }
+        const k=logSkill(e);
+        if(k<0)continue;
+        if(!e.correct||e.hint)seenWrong.add(k);
+        else if(seenWrong.has(k))corrected.add(k);
+      }
+      return {total,correct,days:days.size,corrected:corrected.size,seconds:totalFocusSeconds()};
+    }
+    function focusLabel(seconds){
+      const minutes=Math.floor(seconds/60);
+      if(minutes<1)return '1分未満';
+      const hours=Math.floor(minutes/60);
+      return hours?hours+'時間'+(minutes%60?minutes%60+'分':''):minutes+'分';
+    }
+    function nextGoal(n){
+      const milestones=[10,30,60,100,200,300,500,1000];
+      const target=milestones.find(v=>n<v)||Math.ceil((n+1)/500)*500;
+      return '🎯 次の目標：累計'+target+'問まで、あと'+(target-n)+'問。今日は焦らず、自分で考える時間を大事にしよう。';
+    }
+    function showGrowth(){
+      const st=growthData();
+      $('growthTitle').textContent=learnerName()+'の成長ノート ✨';
+      $('growthTime').textContent=focusLabel(st.seconds);
+      $('growthAnswers').textContent=st.total+'問';
+      $('growthDays').textContent=st.days+'日';
+      $('growthIndependent').textContent=st.correct+'問';
+      $('growthAchievement').textContent=st.corrected>0
+        ?'🌱 できるようになったサイン：一度まちがえた考え方を、そのあとヒントなしで'+st.corrected+'種類正解できたよ！'
+        :st.total>=10?'🌱 続けることが成長の第一歩。'+st.total+'問取り組んだ記録があるよ。'
+        :'🌱 1問ずつの積み重ねが、これからの力になるよ。';
+      $('growthGoal').textContent=nextGoal(st.total);
+    }
+
     function coachingAdvice(){
       const groups=Array.from({length:totalUnits},(_,u)=>({u,seen:0,correct:0}));
       for(const e of history){
@@ -667,6 +781,7 @@
       return {question:makeCourseQuestion(choice.u,serial,choice.v,1),serial,choice};
     }
     function startTraining(restart=false){
+      accrueFocus();
       if(restart||train.done>=trainTotal)train=trainInitial();
       train.active=true;review.active=false;saveTrain();
       sections.intro.classList.add('hide');sections.study.classList.remove('hide');
@@ -694,6 +809,7 @@
       return weak[[0,1,0,2,0,1,0,2,0,1][index%10]];
     }
     function startReview(restart=false){
+      accrueFocus();
       if(restart||review.done>=10)review=reviewInitial();
       review.active=true;saveReview();
       sections.intro.classList.add('hide');sections.study.classList.remove('hide');
@@ -707,7 +823,7 @@
         'まだ苦手の記録が少ないので、まずは基礎から練習するよ。'+suffix;
       $('dailySummary').textContent=trainingSummary();
       $('trainBtn').textContent=train.done>=trainTotal?'別の36問を始める':train.done>0?'36問の続きから再開':'36問コースをはじめる';
-      showCoach();
+      showCoach();showGrowth();
       $('course1Status').textContent=courseStatus(1);
       $('course2Status').textContent=courseStatus(2);
       el.resumeText.textContent='選んだコースの続きから始められるよ。①と②の学習記録は別々に保存するよ。';
@@ -1204,7 +1320,7 @@
     }
 
     function render(){
-      stopAuto();pending=false;updateScore();el.feedbackBox.className='feedback hide';el.nextBtn.classList.add('hide');el.choicesBox.replaceChildren();
+      accrueFocus();stopAuto();pending=false;updateScore();el.feedbackBox.className='feedback hide';el.nextBtn.classList.add('hide');el.choicesBox.replaceChildren();
       $('trainHintPanel').classList.add('hide');$('trainHintText').classList.add('hide');
       $('trainAgainBtn').classList.add('hide');
       if(train.active&&train.done>=trainTotal){
@@ -1273,13 +1389,14 @@
         $('trainHintText').textContent='';
       }
       el.questionBox.textContent=active.q;el.motivText.textContent=messages[serial%messages.length];
+      resumeFocus();
       for(const opt of active.options){
         const button=document.createElement('button');button.type='button';button.className='choice';button.textContent=fmt(opt);
         button.addEventListener('click',()=>answer(opt,button),{once:true});el.choicesBox.append(button);
       }
     }
     function advance(){
-      if(!pending)return;stopAuto();pending=false;
+      if(!pending)return;accrueFocus();stopAuto();pending=false;
       if(train.active){
         if(!train.lastRight||train.lastHint||train.requestedRetry){
           const skill=train.unit*5+train.variant;
@@ -1303,6 +1420,7 @@
     }
     function answer(selected,clicked){
       if(pending)return;
+      accrueFocus();
       pending=true;const right=selected===active.answer;
       if(train.active){
         train.attempts++;
@@ -1332,10 +1450,12 @@
       el.nextBtn.textContent=train.active?'解説を読んで次へ →':right?(review.active?'次の復習問題へ →':'次の問題へ →'):(review.active?'別の数字で再挑戦 →':'解説を読んで類題へ →');
       if(train.active)$('trainAgainBtn').classList.remove('hide');
       el.nextBtn.classList.remove('hide');el.nextBtn.onclick=advance;
+      // 解説を読んでいる時間も学習時間に含める。
+      resumeFocus();
       // 学習者が途中式を読み終えるまで待つ。勝手に次の問題へ進めない。
     }
     function start(n=1){
-      stopAuto();chooseCourse(n);review.active=false;train.active=false;
+      accrueFocus();stopAuto();chooseCourse(n);review.active=false;train.active=false;
       sections.intro.classList.add('hide');sections.study.classList.remove('hide');
       render();window.scrollTo(0,0);
     }
@@ -1348,7 +1468,7 @@
       try{
         if(name)localStorage.setItem(nicknameKey,name);else localStorage.removeItem(nicknameKey);
         $('nicknameStatus').textContent='この端末の呼び名を保存したよ。';
-        showCoach();
+        showCoach();showGrowth();
       }catch(e){$('nicknameStatus').textContent='保存できなかったよ。ブラウザの設定を確認してね。'}
     };
     $('trainHintBtn').onclick=()=>{
@@ -1364,7 +1484,7 @@
       if(!train.active||!pending)return;
       train.requestedRetry=true;saveTrain();advance();
     };
-    el.backBtn.onclick=()=>{stopAuto();pending=false;review.active=false;train.active=false;saveReview();saveTrain();showIntro()};
+    el.backBtn.onclick=()=>{accrueFocus();stopAuto();pending=false;review.active=false;train.active=false;saveReview();saveTrain();showIntro()};
     window.manabiStart=start;
     window.addEventListener('error',function(){
       // エラーが起きたら娘さんが見える形で伝え、再試行できるようにする。
