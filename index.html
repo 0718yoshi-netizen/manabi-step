@@ -138,6 +138,9 @@
     .kpi .lab{font-size:12px;color:var(--muted);margin-top:2px}
     .explanation-step{font-size:17px;font-weight:600;line-height:1.9;background:#fff;padding:10px 12px;border-radius:12px;margin:8px 0;white-space:pre-wrap;overflow-wrap:anywhere}
     .explanation-note{font-size:13px;margin:10px 0 0;line-height:1.8}
+    .daily-train{margin-top:16px;background:linear-gradient(125deg,#f0fcf7,#fff5fa);border:2px solid #c1e6d5;border-radius:20px;padding:15px 14px}
+    .daily-title{font-size:19px;font-weight:800}
+    .daily-train .btn-main{margin-top:10px}
     .course-card{margin-top:14px;border:1px solid #efdce7;background:#fffafe;border-radius:20px;padding:14px}
     .course-heading{display:flex;align-items:center;gap:12px}
     .course-heading strong{font-size:18px}
@@ -215,6 +218,11 @@
         <button type="button" class="btn btn-sub" disabled aria-disabled="true" style="width:100%;opacity:.7">③ 準備中（まだ受講できません）</button>
       </div>
       <p id="resumeText" class="small" style="margin-top:12px;"></p>
+      <div class="daily-train">
+        <div class="daily-title">🌱 今日の10問・苦手特訓</div>
+        <p id="dailySummary" class="small" style="margin:6px 0 0"></p>
+        <button id="trainBtn" type="button" class="btn btn-main">今日の10問にチャレンジ</button>
+      </div>
       <button id="reviewBtn" type="button" class="btn btn-sub" style="width:100%;margin-top:12px;background:#fff3f9">🎯 苦手なところを10問復習</button>
       <p id="reviewSummary" class="small" style="margin-top:8px"></p>
       <button id="exportBtn" type="button" class="btn btn-sub" style="margin-top:12px;width:100%">学習記録をCSVで保存（保護者用）</button>
@@ -230,9 +238,14 @@
         <div class="progress"><div id="progressBar" class="bar"></div></div>
 
         <div id="questionBox" class="question">問題</div>
+        <div id="trainHintPanel" class="hide" style="margin-bottom:12px">
+          <button id="trainHintBtn" type="button" class="btn btn-sub" style="width:100%">💡 最初のヒントを見る</button>
+          <div id="trainHintText" class="feedback good hide" aria-live="polite"></div>
+        </div>
         <div id="choicesBox" class="choices"></div>
         <div id="feedbackBox" class="feedback hide"></div>
         <button id="nextBtn" class="btn btn-next hide">次へ</button>
+        <button id="trainAgainBtn" type="button" class="btn btn-sub hide" style="width:100%;margin-top:10px">🔁 まだ不安なので、あとでもう一度</button>
 
         <div class="motiv" id="motivText">🌼 できるところからでOK。あせらずいこう！</div>
 
@@ -275,6 +288,22 @@
     const messages=['🌸 1問ずつ進めよう！','🍀 間違いは成長のヒントだよ。','💗 自分のペースで大丈夫。'];
     const initial=()=>({unit:0,inUnit:0,attempt:0,correct:0,streak:0,serial:0,wrongInRow:0});
     let state=initial(),active=null,pending=false,autoTimer=null;
+    const trainKey='manabi-step-daily-training-v1';
+    const trainInitial=()=>({active:false,done:0,attempts:0,correct:0,streak:0,seed:Date.now()%1000000,
+      recent:[],retry:[],unit:0,variant:0,lastRight:true,lastHint:false,requestedRetry:false});
+    let train=trainInitial();
+    try{
+      const saved=JSON.parse(localStorage.getItem(trainKey));
+      if(saved&&Number.isInteger(saved.done)&&saved.done>=0&&saved.done<=10&&
+         Number.isInteger(saved.attempts)&&saved.attempts>=0&&saved.attempts<=50&&
+         Number.isInteger(saved.correct)&&saved.correct>=0&&saved.correct<=50){
+        train={...trainInitial(),...saved,active:false,requestedRetry:false};
+        if(!Array.isArray(train.recent))train.recent=[];
+        if(!Array.isArray(train.retry))train.retry=[];
+      }
+    }catch(e){}
+    function saveTrain(){try{localStorage.setItem(trainKey,JSON.stringify(train))}catch(e){}}
+
     const reviewKey='manabi-step-review-progress-v1';
     const reviewInitial=()=>({active:false,done:0,attempts:0,correct:0,streak:0,retryUnit:-1,unit:0,lastRight:true});
     let review=reviewInitial();
@@ -351,11 +380,12 @@
       if(e)e.textContent=(endpoint&&syncKey)?('端末内 '+history.length+'件記録 / 送信待ち '+outbox.length+'件'):
         ('端末内に '+history.length+'件記録済み（保護者用集計は接続準備中）');
     }
-    function logAnswer(selected,correct,unitNo=state.unit,questionNo=null,logVersion='v5-c'+selectedCourse){
+    function logAnswer(selected,correct,unitNo=state.unit,questionNo=null,logVersion='v5-c'+selectedCourse,skillNo=null){
       const event={id:randId(),time:new Date().toISOString(),session:sessionId,unit:unitNo+1,
         unitTitle:titles[unitNo],number:questionNo===null?unitNo*requiredPerUnit+state.inUnit+1:questionNo,
         question:active.q,selected:fmt(selected),answer:fmt(active.answer),correct:!!correct,
         seconds:Math.max(0,Math.round((Date.now()-questionShownAt)/1000)),version:logVersion};
+      if(Number.isInteger(skillNo)&&skillNo>=0&&skillNo<5)event.skill=unitNo*5+skillNo;
       history.push(event);outbox.push(event);
       if(history.length>3000)history=history.slice(-3000);
       if(outbox.length>3000)outbox=outbox.slice(-3000);
@@ -434,6 +464,106 @@
     setSyncStatus();
     if(endpoint&&syncKey)setTimeout(syncBatch,1500);
 
+
+    // 学習結果の正誤だけでなく「何の考え方」で間違えたかを記録する。
+    // すでに保存済みの旧版ログも、判別できる問題は後から識別する。
+    function logSkill(e){
+      const u=Number(e.unit)-1;
+      if(!Number.isInteger(u)||u<0||u>=totalUnits)return -1;
+      if(Number.isInteger(e.skill)&&e.skill>=0&&e.skill<totalUnits*5)return e.skill;
+      const tag=String(e.version||'');
+      const matched=tag.match(/train-u(\d+)s([0-4])/);
+      if(matched&&Number(matched[1])===u+1)return u*5+Number(matched[2]);
+      const q=String(e.question||'');
+      if(u===11){
+        if(/^x\(x \+/.test(q))return u*5;
+        if(/^\(x \+/.test(q)&&/すべて広げる/.test(q))return u*5+2;
+        if(/^\(x \+/.test(q)&&(/xが1つだけ|x の係数/.test(q)))return u*5+1;
+        if(/^x² \+/.test(q)&&/2つのかっこの/.test(q))return u*5+4;
+        if(/^x² \+/.test(q)&&/かっこのかけ算/.test(q))return u*5+3;
+      }
+      // 古い形式の大まかな基礎問題は、各単元の最初の考え方として扱う。
+      if(tag==='v4'&&u!==11)return u*5;
+      return -1;
+    }
+    function learningStats(){
+      const all=Array.from({length:totalUnits*5},(_,key)=>({
+        key,u:Math.floor(key/5),v:key%5,seen:0,wrong:0,streak:0,last:0,lastCorrect:false,lastHint:false
+      }));
+      for(const e of history){
+        if(typeof e.correct!=='boolean'||String(e.unitTitle)==='接続テスト')continue;
+        const key=logSkill(e);if(key<0)continue;
+        const s=all[key];
+        s.seen++;if(!e.correct)s.wrong++;
+        s.streak=e.correct?s.streak+1:0;
+        s.lastCorrect=e.correct;s.lastHint=!!e.hint;
+        const t=Date.parse(e.time||'');if(Number.isFinite(t))s.last=t;
+      }
+      const now=Date.now();
+      for(const st of all){
+        const interval=st.streak>=3?7:st.streak===2?3:1;
+        st.due=st.lastCorrect?st.last+interval*86400000:0;
+        st.isDue=st.seen>0&&(!st.lastCorrect||st.due<=now);
+      }
+      return all;
+    }
+    function skillTitle(u,v){
+      if(u===11)return ['かっこを広げる','xの数字を見つける','4つをかけて広げる',
+        '共通のxを外へ出す','2つのかっこに戻す'][v];
+      return ['練習①','練習②','練習③','練習④','練習⑤'][v];
+    }
+    function trainingSummary(){
+      const st=learningStats();
+      const wrong=st.filter(x=>x.wrong>0&&x.isDue)
+        .sort((a,b)=>(b.wrong/Math.max(1,b.seen))-(a.wrong/Math.max(1,a.seen))||b.wrong-a.wrong);
+      const any=st.filter(x=>x.wrong>0).sort((a,b)=>b.wrong-a.wrong);
+      const target=wrong[0]||any[0];
+      const prefix=target?'優先：「'+titles[target.u]+'」の'+skillTitle(target.u,target.v)+'。':
+        'まだ苦手がわからないので、基礎を広く確認するよ。';
+      const progress=train.done>0&&train.done<10?'前回の続き '+train.done+'/10問。':
+        train.done>=10?'前回の10問は完了。もう一度取り組めるよ。':'';
+      return prefix+' 間違いは解説で直し、日を空けてまた確認するよ。'+progress;
+    }
+    function pickTrainingSkill(){
+      const stats=learningStats();
+      const near=train.recent.slice(-2);
+      const ready=train.retry.find(x=>Number.isInteger(x.key)&&x.key>=0&&x.key<60&&x.at<=train.done&&!near.includes(x.key));
+      if(ready){
+        train.retry=train.retry.filter(x=>x!==ready);
+        return {u:Math.floor(ready.key/5),v:ready.key%5};
+      }
+      const eligible=stats.map(st=>{
+        let points=0;
+        if(st.wrong>0){
+          points=4*(st.wrong/Math.max(1,st.seen))+Math.min(st.wrong,5)*1.2;
+          points+=st.isDue?5:-5;
+          if(!st.lastCorrect)points+=3;
+        }else if(st.seen>0){points=st.isDue?1.5:-4;}
+        else{
+          // まだ一度も解いていない考え方を、時々混ぜて理解を確かめる。
+          points=0.6+(st.u===7||st.u===9||st.u===11?0.5:0);
+        }
+        if(near.includes(st.key))points-=25;
+        if(train.recent.includes(st.key))points-=1.5;
+        // 同点の場合は毎回同じ考え方だけにならないよう、決定的に順序を変える。
+        points+=(((st.key*23+train.seed+train.done*11)%61)/610);
+        return {st,points};
+      }).sort((a,b)=>b.points-a.points);
+      const pick=eligible[0].st;
+      return {u:pick.u,v:pick.v};
+    }
+    function trainingQuestion(){
+      const choice=pickTrainingSkill();
+      train.unit=choice.u;train.variant=choice.v;
+      const serial=train.seed+train.done*47+choice.u*31+choice.v*13+train.attempts*7;
+      return {question:makeCourseQuestion(choice.u,serial,choice.v,selectedCourse),serial,choice};
+    }
+    function startTraining(restart=false){
+      if(restart||train.done>=10)train=trainInitial();
+      train.active=true;review.active=false;saveTrain();
+      sections.intro.classList.add('hide');sections.study.classList.remove('hide');
+      render();window.scrollTo(0,0);
+    }
     function rankWeakUnits(){
       const stats=Array.from({length:totalUnits},()=>({seen:0,wrong:0}));
       // 同じ端末に残っている履歴だけを使用し、接続テストは対象外にする。
@@ -467,6 +597,8 @@
       $('reviewSummary').textContent=weak.length?
         '苦手の候補：「'+titles[weak[0]]+'」から優先して練習するよ。'+suffix:
         'まだ苦手の記録が少ないので、まずは基礎から練習するよ。'+suffix;
+      $('dailySummary').textContent=trainingSummary();
+      $('trainBtn').textContent=train.done>=10?'今日の特訓をもう一度':train.done>0?'今日の10問を続ける':'今日の10問にチャレンジ';
       $('course1Status').textContent=courseStatus(1);
       $('course2Status').textContent=courseStatus(2);
       el.resumeText.textContent='選んだコースの続きから始められるよ。①と②の学習記録は別々に保存するよ。';
@@ -848,9 +980,9 @@
         steps:[...item.steps,'答え：'+fmt(item.answer)],options};
     }
     function updateScore(){
-      el.scoreCorrect.textContent=review.active?review.correct:state.correct;
-      el.scoreAttempt.textContent=review.active?review.attempts:state.attempt;
-      el.scoreStreak.textContent=review.active?review.streak:state.streak;
+      el.scoreCorrect.textContent=train.active?train.correct:review.active?review.correct:state.correct;
+      el.scoreAttempt.textContent=train.active?train.attempts:review.active?review.attempts:state.attempt;
+      el.scoreStreak.textContent=train.active?train.streak:review.active?review.streak:state.streak;
     }
 
     // 最後の答えだけでなく、考え方と途中の式を一行ずつ見せる。
@@ -964,6 +1096,16 @@
 
     function render(){
       stopAuto();pending=false;updateScore();el.feedbackBox.className='feedback hide';el.nextBtn.classList.add('hide');el.choicesBox.replaceChildren();
+      $('trainHintPanel').classList.add('hide');$('trainHintText').classList.add('hide');
+      $('trainAgainBtn').classList.add('hide');
+      if(train.active&&train.done>=10){
+        el.unitTitle.textContent='🎉 今日の10問が終了！';el.counter.textContent='完了';el.progressBar.style.width='100%';
+        el.questionBox.textContent='今日の練習、おつかれさま 💗';
+        el.feedbackBox.textContent='自力で正解したのは'+train.correct+' / 10問。間違えた考え方は、時間を空けてもう一度確認しよう。';
+        el.feedbackBox.className='feedback good';
+        el.nextBtn.textContent='別の10問にチャレンジ';el.nextBtn.classList.remove('hide');
+        el.nextBtn.onclick=()=>startTraining(true);return;
+      }
       if(review.active&&review.done>=10){
         el.unitTitle.textContent='🎉 10問復習おわり！';el.counter.textContent='完了';el.progressBar.style.width='100%';
         el.questionBox.textContent='10問がんばったね！ 💗';
@@ -972,7 +1114,7 @@
         el.nextBtn.textContent='もう一度10問復習する';el.nextBtn.classList.remove('hide');
         el.nextBtn.onclick=()=>startReview(true);return;
       }
-      if(!review.active&&state.unit>=totalUnits){
+      if(!review.active&&!train.active&&state.unit>=totalUnits){
         el.unitTitle.textContent='🎉 コース'+(selectedCourse===1?'①':'②')+'完了！';el.counter.textContent='完了';el.progressBar.style.width='100%';
         el.questionBox.textContent='コース'+(selectedCourse===1?'①':'②')+' 60問クリア！おつかれさま 💗';
         el.feedbackBox.textContent='中学数学の基礎12単元を最後まで取り組んだよ。もう一度復習しよう。';el.feedbackBox.className='feedback good';
@@ -982,8 +1124,16 @@
           save();render();
         };return;
       }
-      const u=review.active?reviewUnitAt(review.done):state.unit;
-      const serial=review.active?(state.serial+109+review.done*17+review.attempts*11):state.serial;
+      let u,serial,trainQuestion=null;
+      if(train.active){
+        const t=trainingQuestion();u=t.choice.u;serial=t.serial;trainQuestion=t.question;
+        el.unitTitle.textContent='🌱 今日の特訓：'+titles[u]+'／'+skillTitle(u,t.choice.v);
+        el.counter.textContent='今日の練習 '+(train.done+1)+' / 10問';
+        el.progressBar.style.width=(train.done*10)+'%';
+        train.requestedRetry=false;train.lastHint=false;saveTrain();
+      }else if(review.active){
+        u=reviewUnitAt(review.done);serial=state.serial+109+review.done*17+review.attempts*11;
+      }else{u=state.unit;serial=state.serial;}
       if(review.active){
         review.unit=u;
         el.unitTitle.textContent='🎯 復習：'+titles[u];
@@ -994,8 +1144,14 @@
         el.counter.textContent=`単元${u+1}/${totalUnits} ・ ${state.inUnit+1}/${requiredPerUnit}問`;
         el.progressBar.style.width=`${Math.round(((u*requiredPerUnit+state.inUnit)/(totalUnits*requiredPerUnit))*100)}%`;
       }
-      active=makeCourseQuestion(u,serial,review.active?review.done%5:state.inUnit,selectedCourse);
+      active=train.active?trainQuestion:makeCourseQuestion(u,serial,review.active?review.done%5:state.inUnit,selectedCourse);
       active.unit=u;active.serial=serial;questionShownAt=Date.now();
+      if(train.active){
+        $('trainHintPanel').classList.remove('hide');
+        $('trainHintBtn').disabled=false;
+        $('trainHintBtn').textContent='💡 最初のヒントを見る';
+        $('trainHintText').textContent='';
+      }
       el.questionBox.textContent=active.q;el.motivText.textContent=messages[serial%messages.length];
       for(const opt of active.options){
         const button=document.createElement('button');button.type='button';button.className='choice';button.textContent=fmt(opt);
@@ -1004,6 +1160,17 @@
     }
     function advance(){
       if(!pending)return;stopAuto();pending=false;
+      if(train.active){
+        if(!train.lastRight||train.requestedRetry){
+          const skill=train.unit*5+train.variant;
+          // 同じ考え方は他の問題をはさんでから、数字を変えて出し直す。
+          const already=train.retry.some(x=>x.key===skill);
+          if(!already)train.retry.push({key:skill,at:train.done+3});
+        }
+        train.recent.push(train.unit*5+train.variant);
+        if(train.recent.length>6)train.recent=train.recent.slice(-6);
+        train.done++;saveTrain();render();return;
+      }
       if(review.active){
         review.done++;
         review.retryUnit=review.lastRight?-1:review.unit;
@@ -1017,7 +1184,14 @@
     function answer(selected,clicked){
       if(pending)return;
       pending=true;const right=selected===active.answer;
-      if(review.active){
+      if(train.active){
+        train.attempts++;
+        train.lastRight=right;
+        if(right){train.correct++;train.streak++}else{train.streak=0}
+        saveTrain();
+        logAnswer(selected,right,train.unit,train.unit*requiredPerUnit+train.variant+1,
+          'v5-train-u'+(train.unit+1)+'s'+train.variant,train.variant);
+      }else if(review.active){
         review.attempts++;
         review.lastRight=right;
         if(right){review.correct++;review.streak++}else{review.streak=0}
@@ -1033,19 +1207,34 @@
       el.choicesBox.querySelectorAll('button').forEach(b=>{b.disabled=true;if(b.textContent===fmt(active.answer))b.classList.add('correct')});
       if(!right)clicked.classList.add('wrong');
       showExplanation(right,selected,active,active.unit,active.serial);
-      el.nextBtn.textContent=right?(review.active?'次の復習問題へ →':'次の問題へ →'):(review.active?'別の数字で再挑戦 →':'解説を読んで類題へ →');
+      el.nextBtn.textContent=train.active?'解説を読んで次へ →':right?(review.active?'次の復習問題へ →':'次の問題へ →'):(review.active?'別の数字で再挑戦 →':'解説を読んで類題へ →');
+      if(train.active)$('trainAgainBtn').classList.remove('hide');
       el.nextBtn.classList.remove('hide');el.nextBtn.onclick=advance;
       // 学習者が途中式を読み終えるまで待つ。勝手に次の問題へ進めない。
     }
     function start(n=1){
-      stopAuto();chooseCourse(n);review.active=false;
+      stopAuto();chooseCourse(n);review.active=false;train.active=false;
       sections.intro.classList.add('hide');sections.study.classList.remove('hide');
       render();window.scrollTo(0,0);
     }
     el.startBtn.onclick=()=>start(1);
     $('startCourse2Btn').onclick=()=>start(2);
-    $('reviewBtn').onclick=()=>startReview(false);
-    el.backBtn.onclick=()=>{stopAuto();pending=false;review.active=false;saveReview();showIntro()};
+    $('reviewBtn').onclick=()=>{train.active=false;startReview(false)};
+    $('trainBtn').onclick=()=>startTraining(false);
+    $('trainHintBtn').onclick=()=>{
+      if(!train.active||pending)return;
+      const first=(active.steps||[])[0]||'① 問題の数字をよく見よう。';
+      $('trainHintText').textContent=first;
+      $('trainHintText').classList.remove('hide');
+      $('trainHintBtn').textContent='ヒントを表示中';
+      $('trainHintBtn').disabled=true;
+      train.lastHint=true;saveTrain();
+    };
+    $('trainAgainBtn').onclick=()=>{
+      if(!train.active||!pending)return;
+      train.requestedRetry=true;saveTrain();advance();
+    };
+    el.backBtn.onclick=()=>{stopAuto();pending=false;review.active=false;train.active=false;saveReview();saveTrain();showIntro()};
     window.manabiStart=start;
     window.addEventListener('error',function(){
       // エラーが起きたら娘さんが見える形で伝え、再試行できるようにする。
