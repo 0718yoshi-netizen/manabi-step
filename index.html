@@ -386,6 +386,7 @@
         question:active.q,selected:fmt(selected),answer:fmt(active.answer),correct:!!correct,
         seconds:Math.max(0,Math.round((Date.now()-questionShownAt)/1000)),version:logVersion};
       if(Number.isInteger(skillNo)&&skillNo>=0&&skillNo<5)event.skill=unitNo*5+skillNo;
+      if(train.active)event.hint=!!train.lastHint;
       history.push(event);outbox.push(event);
       if(history.length>3000)history=history.slice(-3000);
       if(outbox.length>3000)outbox=outbox.slice(-3000);
@@ -495,8 +496,9 @@
         const key=logSkill(e);if(key<0)continue;
         const s=all[key];
         s.seen++;if(!e.correct)s.wrong++;
-        s.streak=e.correct?s.streak+1:0;
-        s.lastCorrect=e.correct;s.lastHint=!!e.hint;
+        // ヒントを見た正解は「自力で覚えていた」とは数えない。
+        s.streak=e.correct&&!e.hint?s.streak+1:0;
+        s.lastCorrect=e.correct&&!e.hint;s.lastHint=!!e.hint;
         const t=Date.parse(e.time||'');if(Number.isFinite(t))s.last=t;
       }
       const now=Date.now();
@@ -1161,7 +1163,7 @@
     function advance(){
       if(!pending)return;stopAuto();pending=false;
       if(train.active){
-        if(!train.lastRight||train.requestedRetry){
+        if(!train.lastRight||train.lastHint||train.requestedRetry){
           const skill=train.unit*5+train.variant;
           // 同じ考え方は他の問題をはさんでから、数字を変えて出し直す。
           const already=train.retry.some(x=>x.key===skill);
@@ -1187,7 +1189,7 @@
       if(train.active){
         train.attempts++;
         train.lastRight=right;
-        if(right){train.correct++;train.streak++}else{train.streak=0}
+        if(right&&!train.lastHint){train.correct++;train.streak++}else{train.streak=0}
         saveTrain();
         logAnswer(selected,right,train.unit,train.unit*requiredPerUnit+train.variant+1,
           'v5-train-u'+(train.unit+1)+'s'+train.variant,train.variant);
