@@ -184,7 +184,7 @@
 
     <section id="intro" class="card">
       <h2>いっしょにがんばろ 💗</h2>
-      <p class="lead">中1から中3の基礎12単元・全60問。<br>「わからない」をそのままにせず、一歩ずつ進もう。</p>
+      <p class="lead">中1から中3の基礎12単元・各5種類の全60問。<br>答え合わせのあと、1行ずつ途中式を確認できるよ。</p>
       <div class="support">
         <div class="mini" aria-hidden="true"><span class="e l"></span><span class="e r"></span><span class="m"></span></div>
         <div>
@@ -193,7 +193,7 @@
         </div>
       </div>
       <p id="resumeText" class="small" style="margin-top:12px;"></p>
-      <button id="startBtn" class="btn btn-main">60問コースを学習する</button>
+      <button id="startBtn" class="btn btn-main">📚 基礎60問コースを学習する</button>
       <button id="reviewBtn" type="button" class="btn btn-sub" style="width:100%;margin-top:12px;background:#fff3f9">🎯 苦手なところを10問復習</button>
       <p id="reviewSummary" class="small" style="margin-top:8px"></p>
       <button id="exportBtn" type="button" class="btn btn-sub" style="margin-top:12px;width:100%">学習記録をCSVで保存（保護者用）</button>
@@ -419,31 +419,372 @@
       el.resumeText.textContent=state.unit>=totalUnits?'全12単元を完了！もう一度復習できるよ。':`前回のつづき：${titles[state.unit]}（${state.inUnit+1}/${requiredPerUnit}問）`;
     }
     function fmt(x){return String(x).replace(/-/g,'−')}
-    function makeQuestion(u,k){
-      const a=2+(k*7)%13,b=2+(k*5+3)%11,c=2+(k*3+2)%8, x=2+(k*11)%9;
-      let q='',ans=0,why='',d=[];
+    // 基礎60問：12単元×5種類。数字を変えるだけでなく、5つの考え方を練習する。
+    // 最初から解き直しても学習ログ・進捗データは消さない。
+    function makeQuestion(u,k,variant=k%5){
+      const a=2+(k*7)%13,b=2+(k*5+3)%11,c=2+(k*3+2)%8,x=2+(k*11)%9;
+      const v=((variant%5)+5)%5, F=fmt;
+      const m=(q,answer,steps,wrong)=>({q,answer:String(answer),steps,wrong:wrong.map(String)});
+      let item;
       switch(u){
-        case 0:q=`${fmt(-a)} + ${a+b} = ?`; ans=b;why=`−${a}から${a+b}増えるので${b}だよ。`;d=[-b,a+b,-a-b];break;
-        case 1:q=`${a} − ${a+b} = ?`;ans=-b;why=`${a}から${a+b}引くと−${b}になるよ。`;d=[b,a+b,-a-b];break;
-        case 2:q=`(−${a}) × ${b} = ?`;ans=-a*b;why='負の数×正の数は負。数の部分をかけよう。';d=[a*b,-a-b,a+b];break;
-        case 3:q=`${a*b} ÷ (−${a}) = ?`;ans=-b;why=`${a*b}÷${a}=${b}、正÷負は負だよ。`;d=[b,a,-a];break;
-        case 4:q=`${a}x + ${b}x = ?`;ans=(a+b)+'x';why='同じ文字xの係数を足そう。';d=[a*b+'x',(a+b+1)+'x',String(a+b)];break;
-        case 5:q=`x = ${x} のとき、${a}x + ${b} = ?`;ans=a*x+b;why=`xに${x}を代入すると${a}×${x}+${b}=${ans}。`;d=[a+b,a*x-b,a*x];break;
-        case 6:q=`${a}x = ${a*x} の x は？`;ans=x;why=`両辺を${a}で割るとx=${x}。`;d=[a*x,x+a,x-1];break;
-        case 7:q=`${a}x + ${b} = ${a*x+b} の x は？`;ans=x;why=`${b}を移項して${a}x=${a*x}、両辺を${a}で割るよ。`;d=[a*x+b,x+b,a*x];break;
-        case 8:q=`y = ${a}x のとき、x = ${x} なら y は？`;ans=a*x;why=`xに${x}を代入して${a}×${x}だよ。`;d=[a+x,a*x+b,x];break;
-        case 9:q=`x + y = ${x+b}、x − y = ${x-b} の x は？`;ans=x;why='2つの式を足すと2xになり、yが消えるよ。';d=[b,x+b,x-b];break;
-        case 10:q=`√${a*a} = ?`;ans=a;why=`${a}×${a}=${a*a}。√は正の平方根を表すよ。`;d=[a*a,-a,a+1];break;
-        case 11:q=`(x + ${a})(x + ${b}) を広げたとき、xが1つだけつく部分の数字は？`;ans=a+b;why=`展開するとx²+${a+b}x+${a*b}。`;d=[a*b,a+b+1,a];break;
+        case 0: // 正負の数：足し算
+          if(v===0)item=m(F(-a)+' + '+(a+b)+' = ?',b,[
+            '① マイナス'+a+'から、右に'+(a+b)+'進むイメージだよ。',
+            '② '+F(-a)+' + '+(a+b)+' = ('+F(-a)+' + '+a+') + '+b,
+            '③ '+F(-a)+' + '+a+' = 0 なので、0 + '+b+' = '+b
+          ],[-b,a+b,-a-b]);
+          else if(v===1)item=m(a+' + ('+F(-(a+b))+') = ?',-b,[
+            '① 「マイナス'+(a+b)+'を足す」は、'+(a+b)+'を引くのと同じ。',
+            '② '+a+' + ('+F(-(a+b))+') = '+a+' − '+(a+b),
+            '③ = '+a+' − '+a+' − '+b+' = '+F(-b)
+          ],[b,a+b,-a-b]);
+          else if(v===2)item=m('('+F(-a)+') + ('+F(-b)+') = ?',-a-b,[
+            '① マイナスの数どうしを足すよ。',
+            '② 数字だけ足すと '+a+' + '+b+' = '+(a+b),
+            '③ どちらもマイナスなので、答えもマイナス：'+F(-a-b)
+          ],[a+b,-a+b,a-b]);
+          else if(v===3)item=m((a+b)+' + ('+F(-a)+') = ?',b,[
+            '① '+(a+b)+'から'+a+'を引こう。',
+            '② '+(a+b)+' + ('+F(-a)+') = '+(a+b)+' − '+a,
+            '③ = '+b
+          ],[a,b+a,-b]);
+          else item=m('('+F(-a)+') + '+a+' + '+b+' = ?',b,[
+            '① 先に、反対どうしの数字を足そう。',
+            '② '+F(-a)+' + '+a+' = 0',
+            '③ 0 + '+b+' = '+b
+          ],[-b,a+b,0]);
+          break;
+        case 1: // 正負の数：引き算
+          if(v===0)item=m(a+' − '+(a+b)+' = ?',-b,[
+            '① 引く数'+(a+b)+'のほうが'+b+'大きいね。',
+            '② '+a+' − '+(a+b)+' = '+a+' − '+a+' − '+b,
+            '③ = 0 − '+b+' = '+F(-b)
+          ],[b,-a-b,a+b]);
+          else if(v===1)item=m('('+F(-a)+') − '+b+' = ?',-a-b,[
+            '① マイナス'+a+'から、さらに'+b+'引くよ。',
+            '② 0より小さい方向に進むので、数字の部分は足す。',
+            '③ '+F(-a)+' − '+b+' = '+F(-(a+b))
+          ],[a+b,b-a,-a+b]);
+          else if(v===2)item=m('('+F(-a)+') − ('+F(-b)+') = ?',b-a,[
+            '① マイナスを引くと、プラスを足す形になるよ。',
+            '② '+F(-a)+' − ('+F(-b)+') = '+F(-a)+' + '+b,
+            '③ = '+F(b-a)
+          ],[a+b,a-b,-a-b]);
+          else if(v===3)item=m((a+b)+' − ('+F(-a)+') = ?',2*a+b,[
+            '① マイナス'+a+'を引くと、'+a+'を足す形になる。',
+            '② '+(a+b)+' − ('+F(-a)+') = '+(a+b)+' + '+a,
+            '③ = '+(2*a+b)
+          ],[b,2*a-b,a+b]);
+          else item=m('('+F(-a)+') − ('+F(-(a+b))+') = ?',b,[
+            '① 「マイナス'+(a+b)+'を引く」は「プラス'+(a+b)+'を足す」。',
+            '② '+F(-a)+' + '+(a+b),
+            '③ = ('+F(-a)+' + '+a+') + '+b+' = '+b
+          ],[-b,a+b,-a-b]);
+          break;
+        case 2: // 正負の数：かけ算
+          if(v===0)item=m('('+F(-a)+') × '+b+' = ?',-a*b,[
+            '① まず、数字だけかけよう。',
+            '② '+a+' × '+b+' = '+a*b,
+            '③ マイナス×プラスなので、答えにはマイナスをつける。'
+          ],[a*b,-a-b,a+b]);
+          else if(v===1)item=m('('+F(-a)+') × ('+F(-b)+') = ?',a*b,[
+            '① 数字だけなら '+a+' × '+b+' = '+a*b,
+            '② マイナス×マイナスはプラスになる。',
+            '③ だから答えは '+a*b
+          ],[-a*b,a+b,-a-b]);
+          else if(v===2)item=m(a+' × ('+F(-b)+') = ?',-a*b,[
+            '① '+a+' × '+b+' = '+a*b,
+            '② プラス×マイナスはマイナスになる。',
+            '③ だから '+F(-a*b)
+          ],[a*b,-a-b,a+b]);
+          else if(v===3)item=m('('+F(-a)+') × 0 = ?',0,[
+            '① どんな数字も、0をかけると0になる。',
+            '② '+F(-a)+' × 0 = 0',
+            '③ マイナスの数字でも同じだよ。'
+          ],[-a,a,1]);
+          else item=m('('+F(-a)+') × ('+F(-b)+') × ('+F(-2)+') = ?',-2*a*b,[
+            '① 最初の2つをかけよう：'+F(-a)+' × '+F(-b)+' = '+a*b,
+            '② 次に '+a*b+' × '+F(-2),
+            '③ プラス×マイナスなので '+F(-2*a*b)
+          ],[2*a*b,-a*b,-2*(a+b)]);
+          break;
+        case 3: // 正負の数：わり算
+          if(v===0)item=m((a*b)+' ÷ ('+F(-a)+') = ?',-b,[
+            '① まず数字だけで考えよう。',
+            '② '+(a*b)+' ÷ '+a+' = '+b,
+            '③ プラス÷マイナスなので '+F(-b)
+          ],[b,a,-a]);
+          else if(v===1)item=m('('+F(-a*b)+') ÷ ('+F(-a)+') = ?',b,[
+            '① 数字だけだと '+(a*b)+' ÷ '+a+' = '+b,
+            '② マイナス÷マイナスはプラス。',
+            '③ だから答えは '+b
+          ],[-b,a*b,a]);
+          else if(v===2)item=m('('+F(-a*b)+') ÷ '+a+' = ?',-b,[
+            '① '+(a*b)+' ÷ '+a+' = '+b,
+            '② マイナス÷プラスなので、答えはマイナス。',
+            '③ 答えは '+F(-b)
+          ],[b,-a,a]);
+          else if(v===3)item=m((a*b)+' ÷ '+a+' = ?',b,[
+            '① 何を'+a+'倍すると'+(a*b)+'になるかな？',
+            '② '+a+' × '+b+' = '+(a*b),
+            '③ だから '+(a*b)+' ÷ '+a+' = '+b
+          ],[-b,a,a*b]);
+          else item=m('('+F(-2*a*b)+') ÷ ('+F(-a)+') = ?',2*b,[
+            '① マイナス÷マイナスなのでプラス。',
+            '② '+(2*a*b)+' ÷ '+a+' = '+(2*b),
+            '③ 答えは '+(2*b)
+          ],[-2*b,b,2*a]);
+          break;
+        case 4: // 文字式をまとめる
+          if(v===0)item=m(a+'x + '+b+'x = ?', (a+b)+'x',[
+            '① '+a+'x は「xが'+a+'個」、'+b+'x は「xが'+b+'個」。',
+            '② '+a+'個 + '+b+'個 = '+(a+b)+'個',
+            '③ = '+(a+b)+'x'
+          ],[a*b+'x',a+'x',a+b]);
+          else if(v===1)item=m(a+'x − '+b+'x = ?',F(a-b)+'x',[
+            '① xの個数どうしを引こう。',
+            '② '+a+'個 − '+b+'個 = '+F(a-b)+'個',
+            '③ '+a+'x − '+b+'x = '+F(a-b)+'x'
+          ],[(a+b)+'x',F(b-a)+'x',a*b+'x']);
+          else if(v===2)item=m(a+'x + '+b+' + '+c+'x = ?',(a+c)+'x + '+b,[
+            '① xがついた部分だけを探そう：'+a+'x と '+c+'x。',
+            '② '+a+'x + '+c+'x = '+(a+c)+'x',
+            '③ 数字だけの'+b+'はそのまま残す：'+(a+c)+'x + '+b
+          ],[(a+b+c)+'x',(a+c)+'x + '+(b+1),a+'x + '+(b+c)]);
+          else if(v===3)item=m((a+b)+'x − '+a+'x = ?',b+'x',[
+            '① xが'+(a+b)+'個あるところから'+a+'個引こう。',
+            '② '+(a+b)+' − '+a+' = '+b,
+            '③ 残るのは '+b+'x'
+          ],[(a+b)+'x',a+'x',F(-b)+'x']);
+          else item=m(a+'x + '+b+'x − '+c+'x = ?',F(a+b-c)+'x',[
+            '① xの個数をまとめよう。',
+            '② '+a+' + '+b+' − '+c+' = '+F(a+b-c),
+            '③ 答えは '+F(a+b-c)+'x'
+          ],[(a+b+c)+'x',(a+b)+'x',F(a-b-c)+'x']);
+          break;
+        case 5: // 文字に数字を入れて計算
+          if(v===0)item=m('x = '+x+' のとき、'+a+'x + '+b+' = ?',a*x+b,[
+            '① x のところに '+x+' を入れるよ。',
+            '② '+a+' × '+x+' + '+b,
+            '③ '+(a*x)+' + '+b+' = '+(a*x+b)
+          ],[a*x-b,a+b,a*x]);
+          else if(v===1)item=m('x = '+x+' のとき、'+a+'x − '+b+' = ?',a*x-b,[
+            '① xの代わりに'+x+'を入れる。',
+            '② '+a+' × '+x+' − '+b,
+            '③ '+(a*x)+' − '+b+' = '+(a*x-b)
+          ],[a*x+b,a-b,a*x]);
+          else if(v===2){const y=2+k%4;item=m('x = '+x+'、y = '+y+' のとき、'+a+'x + '+b+'y = ?',a*x+b*y,[
+            '① x を'+x+'、y を'+y+'にするよ。',
+            '② '+a+' × '+x+' + '+b+' × '+y,
+            '③ '+a*x+' + '+b*y+' = '+(a*x+b*y)
+          ],[a*x+b,a*x+b*y+1,a*x+b*y-b]);}
+          else if(v===3)item=m('x = '+x+' のとき、x² + '+b+' = ?',x*x+b,[
+            '① x² は「xを2回かける」という意味。',
+            '② '+x+' × '+x+' + '+b,
+            '③ '+(x*x)+' + '+b+' = '+(x*x+b)
+          ],[2*x+b,x+b,x*x]);
+          else item=m('x = '+x+' のとき、'+a+'(x + '+b+') = ?',a*(x+b),[
+            '① 先にカッコの中を計算するよ。',
+            '② x + '+b+' = '+x+' + '+b+' = '+(x+b),
+            '③ '+a+' × '+(x+b)+' = '+(a*(x+b))
+          ],[a*x+b,a+x+b,a*x]);
+          break;
+        case 6: // 方程式：xを求める基礎
+          if(v===0)item=m(a+'x = '+(a*x)+' の x は？',x,[
+            '① '+a+'x は「xを'+a+'倍したもの」。',
+            '② xを1個分にするには、両方を'+a+'でわる。',
+            '③ x = '+(a*x)+' ÷ '+a+' = '+x
+          ],[a*x,x+a,x-1]);
+          else if(v===1)item=m('x + '+b+' = '+(x+b)+' の x は？',x,[
+            '① 両方から'+b+'を引こう。',
+            '② x = '+(x+b)+' − '+b,
+            '③ x = '+x
+          ],[x+b,b,x-1]);
+          else if(v===2)item=m('x − '+b+' = '+F(x-b)+' の x は？',x,[
+            '① 両方に'+b+'を足そう。',
+            '② x = '+F(x-b)+' + '+b,
+            '③ x = '+x
+          ],[x-b,x+b,b]);
+          else if(v===3)item=m('x ÷ '+a+' = '+x+' の x は？',a*x,[
+            '① x を'+a+'でわった数が'+x+'だよ。',
+            '② xを元に戻すには、'+a+'をかけよう。',
+            '③ x = '+x+' × '+a+' = '+(a*x)
+          ],[x,a+x,a*x+a]);
+          else item=m('2x = '+(2*x)+' の x は？',x,[
+            '① 2xは「xが2個分」という意味。',
+            '② 両方を2でわろう。',
+            '③ x = '+(2*x)+' ÷ 2 = '+x
+          ],[2*x,x+2,2]);
+          break;
+        case 7: // 方程式：両辺に同じことをする
+          if(v===0)item=m(a+'x + '+b+' = '+(a*x+b)+' の x は？',x,[
+            '① 両方から'+b+'を引くよ。',
+            '② '+a+'x = '+(a*x),
+            '③ 両方を'+a+'でわる：x = '+(a*x)+' ÷ '+a+' = '+x
+          ],[a*x+b,a*x,x+b]);
+          else if(v===1)item=m(a+'x − '+b+' = '+F(a*x-b)+' の x は？',x,[
+            '① 両方に'+b+'を足そう。',
+            '② '+a+'x = '+(a*x),
+            '③ 両方を'+a+'でわる：x = '+(a*x)+' ÷ '+a+' = '+x
+          ],[a*x-b,a*x,x+b]);
+          else if(v===2){const t=Math.max(1,a-2);const z=(a-t)*x+b;item=m(a+'x + '+b+' = '+t+'x + '+z+' の x は？',x,[
+            '① 両方から'+t+'x を引こう。',
+            '② '+(a-t)+'x + '+b+' = '+z,
+            '③ 両方から'+b+'を引く：'+(a-t)+'x = '+(z-b),
+            '④ x = '+(z-b)+' ÷ '+(a-t)+' = '+x
+          ],[z,a*x,x+b]);}
+          else if(v===3){const rhs=x-b;item=m(a+'x − '+b+' = '+(a-1)+'x + ('+F(rhs)+') の x は？',x,[
+            '① 両方から'+(a-1)+'x を引くよ。',
+            '② x − '+b+' = '+F(rhs),
+            '③ 両方に'+b+'を足す：x = '+F(rhs)+' + '+b+' = '+x
+          ],[a*x,x+b,rhs]);}
+          else item=m(a+'(x + '+b+') = '+(a*(x+b))+' の x は？',x,[
+            '① 両方を'+a+'でわるよ。',
+            '② x + '+b+' = '+(x+b),
+            '③ 両方から'+b+'を引く：x = '+(x+b)+' − '+b+' = '+x
+          ],[a*(x+b),x+b,x+b-1]);
+          break;
+        case 8: // 比例・反比例
+          if(v===0)item=m('y = '+a+'x。x = '+x+' のとき y は？',a*x,[
+            '① y = '+a+' × x と同じ意味だよ。',
+            '② xに'+x+'を入れよう。',
+            '③ y = '+a+' × '+x+' = '+(a*x)
+          ],[a+x,x,a*x+b]);
+          else if(v===1)item=m('y = '+a+'x。y = '+(a*x)+' のとき x は？',x,[
+            '① '+a+' × x = '+(a*x),
+            '② 両方を'+a+'でわろう。',
+            '③ x = '+(a*x)+' ÷ '+a+' = '+x
+          ],[a*x,a,x+b]);
+          else if(v===2)item=m('y = '+(a*b)+' ÷ x。x = '+a+' のとき y は？',b,[
+            '① 「÷x」のxを'+a+'にする。',
+            '② y = '+(a*b)+' ÷ '+a,
+            '③ y = '+b
+          ],[a,a*b,b+a]);
+          else if(v===3)item=m('y = '+(a*b)+' ÷ x。y = '+a+' のとき x は？',b,[
+            '① '+a+' = '+(a*b)+' ÷ x',
+            '② '+a+' × x = '+(a*b),
+            '③ x = '+(a*b)+' ÷ '+a+' = '+b
+          ],[a,a*b,b+a]);
+          else item=m('y = '+a+'x。x = '+F(-x)+' のとき y は？',-a*x,[
+            '① xのところに'+F(-x)+'を入れる。',
+            '② y = '+a+' × ('+F(-x)+')',
+            '③ プラス×マイナスなので、y = '+F(-a*x)
+          ],[a*x,-x,-a-x]);
+          break;
+        case 9: // 連立方程式
+          if(v===0)item=m('x + y = '+(x+b)+'、x − y = '+F(x-b)+'。x は？',x,[
+            '① 2つの式を足してみよう。',
+            '② +y と −y は打ち消し合うので、2x = '+(2*x),
+            '③ x = '+(2*x)+' ÷ 2 = '+x
+          ],[b,x+b,x-b]);
+          else if(v===1)item=m('x + y = '+(x+b)+'、x − y = '+F(x-b)+'。y は？',b,[
+            '① 上の式から下の式を引こう。',
+            '② (x + y) − (x − y) = 2y',
+            '③ 2y = '+(x+b)+' − ('+F(x-b)+') = '+(2*b),
+            '④ y = '+(2*b)+' ÷ 2 = '+b
+          ],[x,x+b,2*b]);
+          else if(v===2)item=m('x + y = '+(x+b)+'、2x + y = '+(2*x+b)+'。x は？',x,[
+            '① 下の式から上の式を引こう。',
+            '② (2x + y) − (x + y) = x',
+            '③ 右も引く：'+(2*x+b)+' − '+(x+b)+' = '+x,
+            '④ x = '+x
+          ],[b,x+b,2*x]);
+          else if(v===3)item=m('x + y = '+(x+b)+'、x + 2y = '+(x+2*b)+'。y は？',b,[
+            '① 下の式から上の式を引くよ。',
+            '② (x + 2y) − (x + y) = y',
+            '③ '+(x+2*b)+' − '+(x+b)+' = '+b,
+            '④ y = '+b
+          ],[x,x+b,2*b]);
+          else item=m('2x + y = '+(2*x+b)+'、x − y = '+F(x-b)+'。x は？',x,[
+            '① 2つの式を足そう。',
+            '② +y と −y が消えて、3x になる。',
+            '③ 右を足す：'+(2*x+b)+' + ('+F(x-b)+') = '+(3*x),
+            '④ x = '+(3*x)+' ÷ 3 = '+x
+          ],[b,x+b,3*x]);
+          break;
+        case 10: // 平方根：意味・計算・形を整える
+          if(v===0)item=m('√'+(a*a)+' = ?',a,[
+            '① √は「同じ数を2回かけると中の数になる」数を表すよ。',
+            '② '+a+' × '+a+' = '+(a*a),
+            '③ √の答えは0以上の数：'+a
+          ],[a*a,-a,a+1]);
+          else if(v===1)item=m('√'+(4*a*a)+' = ?',2*a,[
+            '① 何と何をかけると'+(4*a*a)+'になるかな？',
+            '② '+(2*a)+' × '+(2*a)+' = '+(4*a*a),
+            '③ だから √'+(4*a*a)+' = '+(2*a)
+          ],[a,4*a*a,-2*a]);
+          else if(v===2)item=m('√'+(2*a*a)+' を、√の中を小さくして表すと？',a+'√2',[
+            '① '+(2*a*a)+' は '+a+' × '+a+' × 2 と同じ。',
+            '② √'+(2*a*a)+' = √('+a+' × '+a+' × 2)',
+            '③ 同じ'+a+'が2つあるので、√の外に1つ出せる。',
+            '④ = '+a+'√2'
+          ],[2*a+'√2',a+'√4',2*a*a]);
+          else if(v===3)item=m('√'+(a*a)+' + √'+(b*b)+' = ?',a+b,[
+            '① まず、√を1つずつ計算しよう。',
+            '② √'+(a*a)+' = '+a+'、√'+(b*b)+' = '+b,
+            '③ '+a+' + '+b+' = '+(a+b)
+          ],[a*b,Math.abs(a-b),a+b+1]);
+          else item=m('√2 × √'+(2*a*a)+' = ?',2*a,[
+            '① √どうしのかけ算は、中の数字をかけて考えられるよ。',
+            '② √(2 × '+(2*a*a)+') = √'+(4*a*a),
+            '③ '+(2*a)+' × '+(2*a)+' = '+(4*a*a)+' なので、答えは '+(2*a)
+          ],[a,a*a,2*a*a]);
+          break;
+        case 11: // 展開・因数分解：かっこを広げる／元に戻す
+          if(v===0)item=m('x(x + '+a+') を広げると？','x² + '+a+'x',[
+            '① かっこの外のxを、中の2つにそれぞれかけるよ。',
+            '② x × x + x × '+a,
+            '③ x × x は x²、x × '+a+' は '+a+'x',
+            '④ = x² + '+a+'x'
+          ],['x² + '+a,'x² + '+(a+1)+'x',a+'x²']);
+          else if(v===1)item=m('(x + '+a+')(x + '+b+') を広げたとき、xが1つだけつく部分の数字は？',a+b,[
+            '① 4つの組み合わせをかけるよ。',
+            '② x × x + x × '+b+' + '+a+' × x + '+a+' × '+b,
+            '③ = x² + '+b+'x + '+a+'x + '+(a*b),
+            '④ xが1つだけつく部分は ('+b+' + '+a+')x = '+(a+b)+'x',
+            '⑤ だから数字は '+(a+b)
+          ],[a*b,a,b]);
+          else if(v===2)item=m('(x + '+a+')(x + '+b+') をすべて広げると？','x² + '+(a+b)+'x + '+a*b,[
+            '① 4つを順番にかけるよ。',
+            '② x × x + x × '+b+' + '+a+' × x + '+a+' × '+b,
+            '③ = x² + '+b+'x + '+a+'x + '+(a*b),
+            '④ xの部分をまとめる：x² + '+(a+b)+'x + '+(a*b)
+          ],['x² + '+(a*b)+'x + '+(a+b),'x² + '+(a+b+1)+'x + '+(a*b),'x² + '+(a+b)+'x + '+(a+b)]);
+          else if(v===3)item=m('x² + '+a+'x を、かっこのかけ算に直すと？','x(x + '+a+')',[
+            '① x²にも'+a+'xにも、共通してxが入っているよ。',
+            '② 両方からxを1つ取り出して、かっこの外に置こう。',
+            '③ x² ÷ x = x、'+a+'x ÷ x = '+a,
+            '④ x(x + '+a+')'
+          ],['x(x + '+(a+1)+')','(x + '+a+')(x + 1)','x(x − '+a+')']);
+          else item=m('x² + '+(a+b)+'x + '+(a*b)+' を、2つのかっこのかけ算に直すと？','(x + '+a+')(x + '+b+')',[
+            '① 足すと'+(a+b)+'、かけると'+(a*b)+'になる2つの数字を探すよ。',
+            '② '+a+' + '+b+' = '+(a+b),
+            '③ '+a+' × '+b+' = '+(a*b),
+            '④ だから (x + '+a+')(x + '+b+')',
+            '⑤ 確認：広げると x² + '+(a+b)+'x + '+(a*b)
+          ],['(x + '+a+')(x + '+(b+1)+')','(x + '+(a+b)+')(x + 1)','(x + '+(a-1)+')(x + '+b+')']);
+          break;
+        default:throw new Error('Unknown unit');
       }
-      const answer=String(ans);const options=[answer];
-      for(const v of d){let st=String(v);if(!options.includes(st))options.push(st)}
-      for(let n=1;options.length<4;n++){const z=typeof ans==='string'&&ans.endsWith('x')?`${a+b+n}x`:String(Number(ans)+n);if(!options.includes(z))options.push(z)}
-      return {q,answer,why,options:options.slice(0,4).sort((one,two)=>{
-        // deterministic variety across questions: stable order on re-render
-        const h=v=>[...v].reduce((z,ch)=>(z*31+ch.charCodeAt(0))%1033,k*17+u*79);
-        return h(one)-h(two);
-      })};
+      const choices=[item.answer];
+      for(const wrong of item.wrong) {
+        const z=String(wrong);
+        if(!choices.includes(z))choices.push(z);
+      }
+      // 不正解の選択肢が同じ数になる場合は、正解とは違う数字で補う。
+      let n=1;
+      while(choices.length<4&&n<100){
+        const z=/^-?\d+$/.test(item.answer)?String(Number(item.answer)+(n%2?-n:n)):
+          /^(−|-)?\d+x$/.test(item.answer)?String(n+a)+'x':
+          item.answer+' + '+n;
+        if(!choices.includes(z))choices.push(z);
+        n++;
+      }
+      if(choices.length<4)throw new Error('Not enough options');
+      const h=value=>[...value].reduce((acc,ch)=>(acc*31+ch.charCodeAt(0))%1033,k*17+u*79+v*7);
+      const options=choices.slice(0,4).sort((one,two)=>h(one)-h(two));
+      return {q:item.q,answer:item.answer,why:item.steps.join('\n'),
+        steps:[...item.steps,'答え：'+fmt(item.answer)],options};
     }
     function updateScore(){
       el.scoreCorrect.textContent=review.active?review.correct:state.correct;
@@ -548,7 +889,7 @@
       head.style.marginBottom='10px';
       head.textContent=right?'⭕ 正解！ 一緒にやり方を確かめよう。':'💡 ここから一緒にやろう。答えは '+fmt(q.answer)+' だよ。';
       feedback.append(head);
-      for(const step of explanationFor(unit,serial)) {
+      for(const step of (q.steps||explanationFor(unit,serial))) {
         const p=document.createElement('p');
         p.className='explanation-step';
         p.textContent=step;
@@ -589,7 +930,7 @@
         el.counter.textContent=`単元${u+1}/${totalUnits} ・ ${state.inUnit+1}/${requiredPerUnit}問`;
         el.progressBar.style.width=`${Math.round(((u*requiredPerUnit+state.inUnit)/(totalUnits*requiredPerUnit))*100)}%`;
       }
-      active=makeQuestion(u,serial);active.unit=u;active.serial=serial;questionShownAt=Date.now();
+      active=makeQuestion(u,serial,review.active?review.done%5:state.inUnit);active.unit=u;active.serial=serial;questionShownAt=Date.now();
       el.questionBox.textContent=active.q;el.motivText.textContent=messages[serial%messages.length];
       for(const opt of active.options){
         const button=document.createElement('button');button.type='button';button.className='choice';button.textContent=fmt(opt);
