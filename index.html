@@ -83,6 +83,14 @@
     .nickname-row {display:flex;gap:8px}
     .nickname-row input,.parent-panel input {min-width:0;width:100%;border:1px solid #bfb7b8;border-radius:8px;padding:9px;background:white;color:var(--ink)}
     .parent-panel {margin-top:22px;padding:4px 16px 8px}
+    .parent-report {margin:7px 0 16px;padding-bottom:15px;border-bottom:1px solid var(--line)}
+    .parent-report h3 {margin-bottom:5px}
+    .parent-report input[type="file"] {margin-bottom:6px;color:var(--ink)}
+    .parent-report input[type="file"]::file-selector-button {font:inherit;color:var(--ink)}
+    .parent-report dl {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:10px 0}
+    .parent-report dl div {background:var(--paper);border-radius:6px;padding:6px 10px}
+    .parent-report dt {font-size:12px;color:var(--muted)}
+    .parent-report dd {margin:0;font-size:18px;font-weight:700}
     .parent-panel label {display:block;margin-top:12px;font-size:14px}
     .parent-actions {display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
     .parent-panel .small:not(:empty) {margin-top:7px}
@@ -188,7 +196,8 @@
         <p id="growthAchievement" class="growth-achievement"></p>
         <p id="growthGoal" class="growth-goal"></p>
         <div class="growth-goal-track" role="progressbar" id="growthGoalTrack" aria-label="次の累計解答数の目標まで" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="growthGoalBar" class="growth-goal-bar"></div></div>
-        <p class="growth-footnote">このブラウザー内の記録です。学習時間は目安です。</p>
+        <p class="growth-footnote" id="growthSource">このブラウザー内の記録です。学習時間は目安です。</p>
+        <a href="#parentSettings" id="openParentReport" class="small">保護者用シートの記録を確認する</a>
       </section>
       <details class="coach-panel card">
         <summary id="coachTitle">学習アドバイス</summary>
@@ -238,6 +247,20 @@
 
     <details id="parentSettings" class="parent-panel card">
       <summary>保護者向け｜学習記録の保存・連携</summary>
+      <section class="parent-report" aria-labelledby="parentReportTitle">
+        <h3 id="parentReportTitle">シートの学習記録を確認</h3>
+        <p class="small" id="parentFileHelp">Googleスプレッドシートの「回答ログ」タブをCSVでダウンロードし、ここで開いてください。集計はこの画面内で行います。</p>
+        <label for="parentLogFile">回答ログのCSVファイル</label>
+        <input id="parentLogFile" type="file" accept=".csv,text/csv" aria-describedby="parentFileHelp">
+        <p id="parentReportStatus" class="small" role="status"></p>
+        <dl id="parentReportValues" class="hide">
+          <div><dt>回答数</dt><dd id="parentAnswers"></dd></div>
+          <div><dt>正解数</dt><dd id="parentCorrect"></dd></div>
+          <div><dt>学習日数</dt><dd id="parentDays"></dd></div>
+          <div><dt>回答時間の合計</dt><dd id="parentSeconds"></dd></div>
+        </dl>
+        <p id="parentTimeNote" class="small hide">回答時間には、解説を読む時間は含まれません。</p>
+      </section>
       <button id="exportBtn" type="button" class="btn btn-sub">学習記録をCSVで保存</button>
       <p id="syncStatus" class="small" aria-live="polite"></p>
       <p class="small">Googleシートへ送る場合は、保護者が連携設定を行ってください。</p>
@@ -464,6 +487,87 @@
       setTimeout(()=>URL.revokeObjectURL(url),3000);
     }
     $('exportBtn').onclick=exportCsv;
+
+    function readCsv(text) {
+      const rows=[];
+      let row=[], field='', quoted=false;
+      const csv=text.replace(/^\uFEFF/,'');
+      for(let i=0;i<csv.length;i++){
+        const char=csv[i];
+        if(quoted){
+          if(char==='"' && csv[i+1]==='"'){field+='"';i++;}
+          else if(char==='"')quoted=false;
+          else field+=char;
+        }else if(char==='"' && field==='')quoted=true;
+        else if(char===','){row.push(field);field='';}
+        else if(char==='\r'||char==='\n'){
+          rows.push([...row,field]);row=[];field='';
+          if(char==='\r'&&csv[i+1]==='\n')i++;
+        }else field+=char;
+      }
+      if(quoted)throw new Error('CSVの末尾まで読み込めませんでした。');
+      if(row.length||field)rows.push([...row,field]);
+      return rows;
+    }
+    function sheetDate(value) {
+      const text=String(value||'').trim();
+      const match=text.match(/^(\d{4})[-/年](\d{1,2})[-/月](\d{1,2})(?:日|[\sT]|$)/);
+      if(!match)return null;
+      const [year,month,day]=match.slice(1).map(Number);
+      const date=new Date(Date.UTC(year,month-1,day));
+      if(date.getUTCFullYear()!==year||date.getUTCMonth()+1!==month||date.getUTCDate()!==day)return null;
+      return date.toISOString().slice(0,10);
+    }
+    function summarizeParentLog(csv) {
+      const [header=[],...rows]=readCsv(csv);
+      const columns=['回答日時(JST)','イベントID','単元番号','正誤','回答秒数'].map(name=>header.findIndex(v=>v.trim()===name));
+      if(columns.some(index=>index<0))throw new Error('「回答ログ」タブからダウンロードしたCSVを選んでください。');
+      const [dateCol,idCol,unitCol,resultCol,timeCol]=columns;
+      const seen=new Set(),days=new Set();
+      let correct=0,seconds=0,missingDates=0,missingSeconds=0;
+      for(const row of rows){
+        const id=row[idCol]?.trim(),unit=Number(row[unitCol]),result=row[resultCol]?.trim();
+        if(!id||seen.has(id)||!Number.isInteger(unit)||unit<1||unit>totalUnits||
+          (result!=='正解'&&result!=='不正解'))continue;
+        seen.add(id);
+        if(result==='正解')correct++;
+        const date=sheetDate(row[dateCol]);
+        if(date)days.add(date);else missingDates++;
+        const time=row[timeCol]?.trim(), elapsed=Number(time);
+        if(time&&Number.isFinite(elapsed)&&elapsed>=0)seconds+=elapsed;else missingSeconds++;
+      }
+      return {answers:seen.size,correct,days:days.size,seconds,missingDates,missingSeconds};
+    }
+    $('openParentReport').onclick=()=>{$('parentSettings').open=true;};
+    let reportSelection=0;
+    $('parentLogFile').onchange=async event=>{
+      const request=++reportSelection;
+      const file=event.target.files?.[0];
+      const status=$('parentReportStatus');
+      const values=$('parentReportValues');
+      const timeNote=$('parentTimeNote');
+      values.classList.add('hide');timeNote.classList.add('hide');status.textContent='';
+      if(!file)return;
+      if(file.size>8*1024*1024){status.textContent='CSVは8MB以下のものを選んでください。';return;}
+      status.textContent='集計しています…';
+      try{
+        const data=summarizeParentLog(await file.text());
+        if(request!==reportSelection)return;
+        if(!data.answers){status.textContent='このCSVには集計対象の回答がありません。';return;}
+        const seconds=Math.round(data.seconds);
+        $('parentAnswers').textContent=data.answers+'回';
+        $('parentCorrect').textContent=data.correct+'回';
+        $('parentDays').textContent=data.missingDates?'日付がある分で '+data.days+'日':data.days+'日';
+        $('parentSeconds').textContent=data.missingSeconds===data.answers?'記録なし'
+          :Math.floor(seconds/60)+'分'+seconds%60+'秒';
+        timeNote.textContent='回答時間には、解説を読む時間は含まれません。'+
+          (data.missingSeconds&&data.missingSeconds<data.answers?' 秒数が記録された回答のみの合計です。':'');
+        status.textContent='保護者用シートの集計を表示しています。';
+        values.classList.remove('hide');timeNote.classList.remove('hide');
+      }catch(error){
+        if(request===reportSelection)status.textContent=error instanceof Error?error.message:'CSVを読み込めませんでした。';
+      }
+    };
     const urlInput=$('scriptUrl'),keyInput=$('secretKey'),pairStatus=$('pairStatus');
     urlInput.value=endpoint;keyInput.value=syncKey;
     const validScriptUrl=url=>{
@@ -600,10 +704,13 @@
     function showGrowth(){
       const st=growthData();
       $('growthTitle').textContent=(learnerName()==='あなた'?'学習記録':learnerName()+'の学習記録');
-      $('growthTime').textContent=focusLabel(st.seconds);
-      $('growthAnswers').textContent=st.total+'問';
-      $('growthDays').textContent=st.days+'日';
-      $('growthIndependent').textContent=st.correct+'問';
+      $('growthTime').textContent=st.seconds>0?focusLabel(st.seconds):'—';
+      $('growthAnswers').textContent=st.total?st.total+'問':'—';
+      $('growthDays').textContent=st.days?st.days+'日':'—';
+      $('growthIndependent').textContent=st.total?st.correct+'問':'—';
+      $('growthSource').textContent=st.total||st.seconds>0
+        ?'このブラウザー内の記録です。学習時間は目安です。'
+        :'このブラウザーに集計できる学習記録はありません。';
       $('growthAchievement').textContent=st.corrected>0
         ?'できるようになったサイン：一度まちがえた考え方を、そのあとヒントなしで'+st.corrected+'種類正解できたよ！'
         :st.total>=10?'続けることが成長の第一歩。'+st.total+'問取り組んだ記録があるよ。'
