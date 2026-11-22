@@ -138,6 +138,13 @@
     .kpi .lab{font-size:12px;color:var(--muted);margin-top:2px}
     .explanation-step{font-size:17px;font-weight:600;line-height:1.9;background:#fff;padding:10px 12px;border-radius:12px;margin:8px 0;white-space:pre-wrap;overflow-wrap:anywhere}
     .explanation-note{font-size:13px;margin:10px 0 0;line-height:1.8}
+    .coach-panel{margin-top:16px;border:1px solid #d6e7ef;background:#f5fbff;border-radius:20px;padding:15px}
+    .coach-line{background:#fff;border-radius:12px;padding:10px 12px;margin:8px 0;line-height:1.8;font-size:14px}
+    .nickname-area{margin-top:14px;border-top:1px solid #dce8ee;padding-top:10px}
+    .nickname-area label{display:block;color:var(--muted);font-size:12px;margin-bottom:7px}
+    .nickname-row{display:flex;gap:8px}
+    .nickname-row input{min-width:0;flex:1;font:inherit;border:1px solid #d7c9dd;border-radius:12px;padding:10px}
+    .nickname-row button{flex:none;padding:10px 16px}
     .daily-train{margin-top:16px;background:linear-gradient(125deg,#f0fcf7,#fff5fa);border:2px solid #c1e6d5;border-radius:20px;padding:15px 14px}
     .daily-title{font-size:19px;font-weight:800}
     .daily-train .btn-main{margin-top:10px}
@@ -218,10 +225,25 @@
         <button type="button" class="btn btn-sub" disabled aria-disabled="true" style="width:100%;opacity:.7">③ 準備中（まだ受講できません）</button>
       </div>
       <p id="resumeText" class="small" style="margin-top:12px;"></p>
+      <section class="coach-panel" aria-label="学習アドバイス">
+        <h3 id="coachTitle" style="margin:0 0 10px;font-size:18px">あなたへの学習アドバイス</h3>
+        <p id="coachStrength" class="coach-line"></p>
+        <p id="coachGap" class="coach-line"></p>
+        <p id="coachToday" class="coach-line"></p>
+        <div class="nickname-area">
+          <label for="nicknameInput">呼び名を設定（このスマホにだけ保存）</label>
+          <div class="nickname-row">
+            <input id="nicknameInput" maxlength="16" autocomplete="off" placeholder="例：みく" aria-label="呼び名">
+            <button id="saveNickname" type="button" class="btn btn-sub">保存</button>
+          </div>
+          <p id="nicknameStatus" class="small" role="status" aria-live="polite"></p>
+        </div>
+      </section>
       <div class="daily-train">
-        <div class="daily-title">🌱 今日の10問・苦手特訓</div>
-        <p id="dailySummary" class="small" style="margin:6px 0 0"></p>
-        <button id="trainBtn" type="button" class="btn btn-main">今日の10問にチャレンジ</button>
+        <div class="daily-title">🌱 約60分の集中練習・36問</div>
+        <p class="small" style="margin:6px 0 0">12問×3セット。途中で振り返りと3〜5分の休憩をはさもう。所要時間は目安だから、解説をゆっくり読んで大丈夫。</p>
+        <p id="dailySummary" class="small" style="margin:8px 0 0"></p>
+        <button id="trainBtn" type="button" class="btn btn-main">36問コースをはじめる</button>
       </div>
       <button id="reviewBtn" type="button" class="btn btn-sub" style="width:100%;margin-top:12px;background:#fff3f9">🎯 苦手なところを10問復習</button>
       <p id="reviewSummary" class="small" style="margin-top:8px"></p>
@@ -288,18 +310,23 @@
     const messages=['🌸 1問ずつ進めよう！','🍀 間違いは成長のヒントだよ。','💗 自分のペースで大丈夫。'];
     const initial=()=>({unit:0,inUnit:0,attempt:0,correct:0,streak:0,serial:0,wrongInRow:0});
     let state=initial(),active=null,pending=false,autoTimer=null;
-    const trainKey='manabi-step-daily-training-v1';
+    const trainTotal=36,trainBlockSize=12;
+    // 旧10問コースと別の保存先。以前の解答履歴には触れない。
+    const trainKey='manabi-step-daily-training-60-v1';
     const trainInitial=()=>({active:false,done:0,attempts:0,correct:0,streak:0,seed:Date.now()%1000000,
-      recent:[],retry:[],unit:0,variant:0,lastRight:true,lastHint:false,requestedRetry:false});
+      recent:[],retry:[],unit:0,variant:0,lastRight:true,lastHint:false,requestedRetry:false,
+      checkpointDone:0,startedAt:new Date().toISOString(),answers:[]});
     let train=trainInitial();
     try{
       const saved=JSON.parse(localStorage.getItem(trainKey));
-      if(saved&&Number.isInteger(saved.done)&&saved.done>=0&&saved.done<=10&&
-         Number.isInteger(saved.attempts)&&saved.attempts>=0&&saved.attempts<=50&&
-         Number.isInteger(saved.correct)&&saved.correct>=0&&saved.correct<=50){
+      if(saved&&Number.isInteger(saved.done)&&saved.done>=0&&saved.done<=trainTotal&&
+         Number.isInteger(saved.attempts)&&saved.attempts>=0&&saved.attempts<=trainTotal+10&&
+         Number.isInteger(saved.correct)&&saved.correct>=0&&saved.correct<=trainTotal){
         train={...trainInitial(),...saved,active:false,requestedRetry:false};
         if(!Array.isArray(train.recent))train.recent=[];
         if(!Array.isArray(train.retry))train.retry=[];
+        if(!Array.isArray(train.answers))train.answers=[];
+        if(!Number.isInteger(train.checkpointDone))train.checkpointDone=0;
       }
     }catch(e){}
     function saveTrain(){try{localStorage.setItem(trainKey,JSON.stringify(train))}catch(e){}}
@@ -526,6 +553,72 @@
       ];
       return subskills[u]?.[v]||'考え方を確認する';
     }
+
+    // 個人名は公開されたソースに埋め込まない。呼び名はこの端末だけに保存する。
+    const nicknameKey='manabi-step-nickname-v1';
+    function learnerName(){
+      try{return (String(localStorage.getItem(nicknameKey)||'').trim().slice(0,16))||'あなた'}
+      catch(e){return 'あなた'}
+    }
+    function coachingAdvice(){
+      const groups=Array.from({length:totalUnits},(_,u)=>({u,seen:0,correct:0}));
+      for(const e of history){
+        const u=Number(e.unit)-1;
+        if(!Number.isInteger(u)||u<0||u>=totalUnits||typeof e.correct!=='boolean'||e.unitTitle==='接続テスト')continue;
+        groups[u].seen++;if(e.correct)groups[u].correct++;
+      }
+      const attempted=groups.reduce((n,g)=>n+g.seen,0);
+      if(!attempted)return {
+        strength:'🌟 得意なところ：まだ記録がないから、最初は幅広く確認してみよう。',
+        gap:'🔍 練習したいところ：解答が集まると、一緒に見つけられるよ。',
+        today:'🎯 今日のおすすめ：36問を3セットに分けて、途中式を自分の手で書こう。'
+      };
+      const seen=groups.filter(g=>g.seen>=3);
+      const good=seen.filter(g=>g.correct/g.seen>=.8)
+        .sort((a,b)=>b.correct/b.seen-a.correct/a.seen||b.seen-a.seen)[0];
+      const weak=seen.filter(g=>g.seen-g.correct>=2)
+        .sort((a,b)=>a.correct/a.seen-b.correct/b.seen||b.seen-a.seen)[0];
+      const skills=learningStats().filter(x=>x.seen>=2&&x.wrong>0)
+        .sort((a,b)=>(b.wrong/b.seen)-(a.wrong/a.seen)||b.wrong-a.wrong);
+      const target=skills[0];
+      const strength=good
+        ?'🌟 得意なところの候補：「'+titles[good.u]+'」は'+good.seen+'問中'+good.correct+'問正解。いい感じだね！'
+        :'🌟 得意なところ：まだ判断するには問題数が少ないから、これから一緒に見つけよう。';
+      const gap=weak
+        ?'🔍 伸ばしたいところ：「'+titles[weak.u]+'」は'+weak.seen+'問中'+weak.correct+'問正解。ここを丁寧に確認しよう。'
+        :'🔍 伸ばしたいところ：今の記録には大きなつまずきは少ないよ。別のタイプの問題も試そう。';
+      const today=target
+        ?'🎯 今日のおすすめ：「'+titles[target.u]+'」の「'+skillTitle(target.u,target.v)+'」を重点練習。間違えたら解説を見て、数字を変えてもう一度！'
+        :weak?'🎯 今日のおすすめ：「'+titles[weak.u]+'」から復習してみよう。'
+        :'🎯 今日のおすすめ：36問でいろいろな考え方を確認してみよう。';
+      return {strength,gap,today};
+    }
+    function showCoach(){
+      $('coachTitle').textContent=learnerName()+'への学習アドバイス';
+      const a=coachingAdvice();
+      $('coachStrength').textContent=a.strength;
+      $('coachGap').textContent=a.gap;
+      $('coachToday').textContent=a.today;
+      $('nicknameInput').value=learnerName()==='あなた'?'':learnerName();
+    }
+    function trainingBlockAdvice(){
+      const last=train.answers.slice(Math.max(0,train.done-trainBlockSize),train.done);
+      const independent=last.filter(a=>a.correct&&!a.hint).length;
+      const problems=last.filter(a=>!a.correct||a.hint);
+      if(!problems.length)return 'この12問は自力で'+independent+'問正解。よくできたね。次は違うタイプの問題も確かめよう。';
+      const latest=problems[problems.length-1];
+      return 'この12問は自力で'+independent+'問正解。次は「'+titles[latest.u]+'」の「'+skillTitle(latest.u,latest.v)+'」をもう一度意識しよう。';
+    }
+    function trainingFinishAdvice(){
+      const mistakes=train.answers.filter(a=>!a.correct||a.hint);
+      const label=learnerName();
+      if(!mistakes.length)return label+'、36問すべて自力でできたね。明日も違う数字で確認すると力がつくよ。';
+      const count=new Map();
+      for(const x of mistakes){const k=x.u*5+x.v;count.set(k,(count.get(k)||0)+1)}
+      const key=[...count].sort((a,b)=>b[1]-a[1])[0][0],u=Math.floor(key/5),v=key%5;
+      return label+'、最後までよく取り組んだね。次は「'+titles[u]+'」の「'+skillTitle(u,v)+'」を優先して復習しよう。明日また自力で解けるか確かめよう。';
+    }
+
     function trainingSummary(){
       const st=learningStats();
       const wrong=st.filter(x=>x.wrong>0&&x.isDue)
@@ -534,8 +627,8 @@
       const target=wrong[0]||any[0];
       const prefix=target?'優先：「'+titles[target.u]+'」の'+skillTitle(target.u,target.v)+'。':
         'まだ苦手がわからないので、基礎を広く確認するよ。';
-      const progress=train.done>0&&train.done<10?'前回の続き '+train.done+'/10問。':
-        train.done>=10?'前回の10問は完了。もう一度取り組めるよ。':'';
+      const progress=train.done>0&&train.done<trainTotal?'続き '+train.done+'/'+trainTotal+'問から再開できるよ。':
+        train.done>=trainTotal?'36問完了！新しいセットに挑戦できるよ。':'';
       return prefix+' 間違いは解説で直し、日を空けてまた確認するよ。'+progress;
     }
     function pickTrainingSkill(){
@@ -570,10 +663,11 @@
       const choice=pickTrainingSkill();
       train.unit=choice.u;train.variant=choice.v;
       const serial=train.seed+train.done*47+choice.u*31+choice.v*13+train.attempts*7;
-      return {question:makeCourseQuestion(choice.u,serial,choice.v,selectedCourse),serial,choice};
+      // 特訓は①の固定された問題タイプを使い、考え方の識別がずれないようにする。
+      return {question:makeCourseQuestion(choice.u,serial,choice.v,1),serial,choice};
     }
     function startTraining(restart=false){
-      if(restart||train.done>=10)train=trainInitial();
+      if(restart||train.done>=trainTotal)train=trainInitial();
       train.active=true;review.active=false;saveTrain();
       sections.intro.classList.add('hide');sections.study.classList.remove('hide');
       render();window.scrollTo(0,0);
@@ -612,7 +706,8 @@
         '苦手の候補：「'+titles[weak[0]]+'」から優先して練習するよ。'+suffix:
         'まだ苦手の記録が少ないので、まずは基礎から練習するよ。'+suffix;
       $('dailySummary').textContent=trainingSummary();
-      $('trainBtn').textContent=train.done>=10?'今日の特訓をもう一度':train.done>0?'今日の10問を続ける':'今日の10問にチャレンジ';
+      $('trainBtn').textContent=train.done>=trainTotal?'別の36問を始める':train.done>0?'36問の続きから再開':'36問コースをはじめる';
+      showCoach();
       $('course1Status').textContent=courseStatus(1);
       $('course2Status').textContent=courseStatus(2);
       el.resumeText.textContent='選んだコースの続きから始められるよ。①と②の学習記録は別々に保存するよ。';
@@ -1112,13 +1207,23 @@
       stopAuto();pending=false;updateScore();el.feedbackBox.className='feedback hide';el.nextBtn.classList.add('hide');el.choicesBox.replaceChildren();
       $('trainHintPanel').classList.add('hide');$('trainHintText').classList.add('hide');
       $('trainAgainBtn').classList.add('hide');
-      if(train.active&&train.done>=10){
-        el.unitTitle.textContent='🎉 今日の10問が終了！';el.counter.textContent='完了';el.progressBar.style.width='100%';
-        el.questionBox.textContent='今日の練習、おつかれさま 💗';
-        el.feedbackBox.textContent='自力で正解したのは'+train.correct+' / 10問。間違えた考え方は、時間を空けてもう一度確認しよう。';
+      if(train.active&&train.done>=trainTotal){
+        el.unitTitle.textContent='🎉 36問チャレンジ完了！';el.counter.textContent='完了';el.progressBar.style.width='100%';
+        el.questionBox.textContent='36問が終わったよ！おつかれさま 💗';
+        el.feedbackBox.textContent='自力で正解 '+train.correct+' / '+trainTotal+'問。\n'+trainingFinishAdvice();
         el.feedbackBox.className='feedback good';
-        el.nextBtn.textContent='別の10問にチャレンジ';el.nextBtn.classList.remove('hide');
+        el.nextBtn.textContent='新しい36問を始める';el.nextBtn.classList.remove('hide');
         el.nextBtn.onclick=()=>startTraining(true);return;
+      }
+      if(train.active&&train.done>0&&train.done<trainTotal&&train.done%trainBlockSize===0&&train.checkpointDone!==train.done){
+        const block=train.done/trainBlockSize;
+        el.unitTitle.textContent='🌿 '+block+'セット目が終了';el.counter.textContent=train.done+'/'+trainTotal+'問';
+        el.progressBar.style.width=Math.round(train.done*100/trainTotal)+'%';
+        el.questionBox.textContent='12問おつかれさま！ 3〜5分休もう。';
+        el.feedbackBox.textContent=trainingBlockAdvice()+'\n目を休めて、水を飲んでから、次のセットへ進もう。';
+        el.feedbackBox.className='feedback good';
+        el.nextBtn.textContent='次の12問へ進む →';el.nextBtn.classList.remove('hide');
+        el.nextBtn.onclick=()=>{train.checkpointDone=train.done;saveTrain();render()};return;
       }
       if(review.active&&review.done>=10){
         el.unitTitle.textContent='🎉 10問復習おわり！';el.counter.textContent='完了';el.progressBar.style.width='100%';
@@ -1142,8 +1247,9 @@
       if(train.active){
         const t=trainingQuestion();u=t.choice.u;serial=t.serial;trainQuestion=t.question;
         el.unitTitle.textContent='🌱 今日の特訓：'+titles[u]+'／'+skillTitle(u,t.choice.v);
-        el.counter.textContent='今日の練習 '+(train.done+1)+' / 10問';
-        el.progressBar.style.width=(train.done*10)+'%';
+        const block=Math.floor(train.done/trainBlockSize)+1;
+        el.counter.textContent='セット'+block+'/3 ・ '+(train.done+1)+'/'+trainTotal+'問';
+        el.progressBar.style.width=Math.round(train.done*100/trainTotal)+'%';
         train.requestedRetry=false;train.lastHint=false;saveTrain();
       }else if(review.active){
         u=reviewUnitAt(review.done);serial=state.serial+109+review.done*17+review.attempts*11;
@@ -1203,6 +1309,8 @@
         train.lastRight=right;
         if(right&&!train.lastHint){train.correct++;train.streak++}else{train.streak=0}
         saveTrain();
+        train.answers.push({u:train.unit,v:train.variant,correct:right,hint:!!train.lastHint,time:new Date().toISOString()});
+        saveTrain();
         logAnswer(selected,right,train.unit,train.unit*requiredPerUnit+train.variant+1,
           'v5-train-u'+(train.unit+1)+'s'+train.variant,train.variant);
       }else if(review.active){
@@ -1235,6 +1343,14 @@
     $('startCourse2Btn').onclick=()=>start(2);
     $('reviewBtn').onclick=()=>{train.active=false;startReview(false)};
     $('trainBtn').onclick=()=>startTraining(false);
+    $('saveNickname').onclick=()=>{
+      const name=String($('nicknameInput').value||'').trim().slice(0,16);
+      try{
+        if(name)localStorage.setItem(nicknameKey,name);else localStorage.removeItem(nicknameKey);
+        $('nicknameStatus').textContent='この端末の呼び名を保存したよ。';
+        showCoach();
+      }catch(e){$('nicknameStatus').textContent='保存できなかったよ。ブラウザの設定を確認してね。'}
+    };
     $('trainHintBtn').onclick=()=>{
       if(!train.active||pending)return;
       const first=(active.steps||[])[0]||'① 問題の数字をよく見よう。';
