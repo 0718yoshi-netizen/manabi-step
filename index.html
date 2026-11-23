@@ -53,9 +53,9 @@
     .mini .l {left:8px}.mini .r {right:8px}
     .mini .m {position:absolute;width:7px;height:4px;border-bottom:1.5px solid #533b47;border-radius:50%;top:13px;left:10.5px}
     .daily-summary {margin-top:12px}
-    .focus-practice {display:flex;align-items:center;justify-content:space-between;gap:12px 20px;flex-wrap:wrap;margin-top:16px;padding:clamp(16px,3vw,24px);border-left:4px solid var(--rose)}
-    .focus-practice h2 {font-size:20px}
-    .focus-practice p {margin-top:4px}
+    .focus-action {margin-top:20px}
+    .standard-practice {border-bottom:1px solid var(--line);margin-bottom:8px}
+    .standard-practice[open] {padding-bottom:12px}
     .btn {min-height:44px;padding:10px 16px;border:1px solid transparent;border-radius:8px;font-weight:700}
     .btn-main,.btn-next {background:var(--rose);color:white}
     .btn-main:hover,.btn-next:hover {background:var(--rose-dark)}
@@ -159,10 +159,28 @@
     </header>
 
     <section id="intro" aria-label="学習ホーム">
-      <section class="daily" aria-labelledby="todayTitle">
+      <section id="focusPractice" class="daily" aria-labelledby="focusTitle">
         <div class="daily-head">
           <div>
-            <h2 id="todayTitle" tabindex="-1">今日の学習</h2>
+            <h2 id="focusTitle" tabindex="-1">今日の学習・30問</h2>
+            <p class="small">マイナスの引き算15問 ＋ 連立方程式で y を求める問題15問</p>
+          </div>
+          <p class="daily-count" id="focusProgress">0 / 30問</p>
+        </div>
+        <div class="daily-action focus-action">
+          <button id="focusBtn" class="btn btn-main" type="button">今日の30問を始める</button>
+          <span id="focusGuide" class="guide" aria-hidden="true"><span class="mini" aria-hidden="true"><span class="e l"></span><span class="e r"></span><span class="m"></span></span><span>ここだよ</span></span>
+        </div>
+        <p class="small daily-summary">1問ずつ解説つき。途中で休んでも、続きから再開できます。</p>
+      </section>
+      <div class="home-grid">
+        <section aria-labelledby="coursesTitle">
+          <h2 id="coursesTitle">単元コースと復習</h2>
+          <details class="standard-practice">
+            <summary>通常の特訓・36問</summary>
+        <div class="daily-head">
+          <div>
+            <h2 id="todayTitle" tabindex="-1">通常の特訓</h2>
             <p id="dailySubtitle" class="small">12問ずつ、3セット</p>
           </div>
           <p class="daily-count"><strong id="dailyCount">0</strong> / 36問</p>
@@ -173,22 +191,10 @@
           <li><span class="set-name">セット3</span><div class="set-meter" aria-hidden="true"><div class="set-fill"></div></div></li>
         </ol>
         <div class="daily-action">
-          <button id="trainBtn" class="btn btn-main" type="button">まず12問をはじめる</button>
-          <span id="dailyGuide" class="guide" aria-hidden="true"><span class="mini" aria-hidden="true"><span class="e l"></span><span class="e r"></span><span class="m"></span></span><span>ここだよ</span></span>
+          <button id="trainBtn" class="btn btn-sub" type="button">通常の特訓を始める</button>
         </div>
         <p id="dailySummary" class="daily-summary small"></p>
-      </section>
-      <section id="focusPractice" class="focus-practice card" aria-labelledby="focusTitle">
-        <div>
-          <h2 id="focusTitle" tabindex="-1">しあげ練習・6問</h2>
-          <p class="small">マイナスの引き算3問 ＋ 連立方程式で y を求める問題3問</p>
-          <p id="focusProgress" class="small"></p>
-        </div>
-        <button id="focusBtn" class="btn btn-main" type="button">しあげ練習を始める</button>
-      </section>
-      <div class="home-grid">
-        <section aria-labelledby="coursesTitle">
-          <h2 id="coursesTitle">単元コースと復習</h2>
+          </details>
           <div class="course-card">
             <div><h3>基礎コース</h3><p class="small">12単元・60問</p><p id="course1Status" class="course-progress"></p></div>
             <button id="startBtn" class="btn btn-sub" type="button" aria-label="基礎コースを開く">開く →</button>
@@ -329,7 +335,7 @@
       recent:[],retry:[],unit:0,variant:0,lastRight:true,lastHint:false,requestedRetry:false,
       checkpointDone:0,startedAt:new Date().toISOString(),completedAt:null,currentQuestion:null,answers:[]});
     const focusPracticeKey='manabi-step-focus-practice-v1';
-    const focusSkills=[{u:1,v:2},{u:1,v:2},{u:1,v:2},{u:9,v:1},{u:9,v:1},{u:9,v:1}];
+    const focusSkills=Array.from({length:30},(_,i)=>i%6<3?{u:1,v:2}:{u:9,v:1});
     function loadTraining(storageKey,total){
       try{
         const saved=JSON.parse(localStorage.getItem(storageKey));
@@ -993,15 +999,12 @@
       const started=train.done>0 || Boolean(train.currentQuestion);
       const onBreak=train.done>0 && train.done%trainBlockSize===0 && train.checkpointDone!==train.done;
       $('dailyCount').textContent=train.done;
-      $('todayTitle').textContent=complete?'今日の目標クリア！':'今日の学習';
+      $('todayTitle').textContent=complete?'通常の特訓クリア！':'通常の特訓';
       $('dailySubtitle').textContent=complete?'12問ずつ、3セット完了':'12問ずつ、3セット';
       $('dailySummary').textContent=complete?trainingFinishAdvice()
         :onBreak?'前のセットは完了。休憩したら次に進もう。'
         :started?'前回のところから再開できます。':'セットの間にひと休み。解説も自分のペースで。';
-      $('trainBtn').textContent=complete?'今日の結果を見る':started?'つづきから':'まず12問をはじめる';
-      $('trainBtn').classList.toggle('btn-main',!complete);
-      $('trainBtn').classList.toggle('btn-sub',complete);
-      $('dailyGuide').classList.toggle('hide',complete);
+      $('trainBtn').textContent=complete?'通常の特訓の結果を見る':started?'通常の特訓の続きから':'通常の特訓を始める';
       [...$('dailySets').children].forEach((set,index)=>{
         const done=Math.max(0,Math.min(trainBlockSize,train.done-index*trainBlockSize));
         const current=!complete && index===Math.floor(train.done/trainBlockSize);
@@ -1042,7 +1045,9 @@
     function trainingQuestion(){
       if(!train.currentQuestion){
         const choice=dailyTraining?focusSkills[train.done]:pickTrainingSkill();
-        const serial=train.seed+train.done*47+choice.u*31+choice.v*13+train.attempts*7;
+        // Keep existing questions while varying both coefficients in later groups.
+        const groupOffset=dailyTraining&&train.done>=6?Math.floor(train.done/3):0;
+        const serial=train.seed+train.done*47+choice.u*31+choice.v*13+train.attempts*7+groupOffset;
         train.currentQuestion={u:choice.u,v:choice.v,serial,hint:false,response:null};
         saveTrain();
       }
@@ -1116,7 +1121,8 @@
       showDailyTraining();
       const finish=focusPractice.done===focusSkills.length;
       $('focusProgress').textContent=focusPractice.done+' / '+focusSkills.length+'問';
-      $('focusBtn').textContent=finish?'しあげ練習の結果を見る':focusPractice.currentQuestion||focusPractice.done?'しあげ練習の続きから':'しあげ練習を始める';
+      $('focusBtn').textContent=finish?'今日の30問の結果を見る':focusPractice.currentQuestion||focusPractice.done?'今日の30問の続きから':'今日の30問を始める';
+      $('focusGuide').classList.toggle('hide',finish);
       showCoach();showGrowth();
       $('course1Status').textContent=courseStatus(1);
       $('course2Status').textContent=courseStatus(2);
@@ -1624,9 +1630,9 @@
       const target=dailyTraining?focusSkills.length:trainTotal;
       if(train.active&&train.done>=target){
         $('studySheet').classList.add('milestone');
-        el.unitTitle.textContent=dailyTraining?'しあげ練習':'今日の学習';el.counter.textContent=target+' / '+target+'問';
+        el.unitTitle.textContent=dailyTraining?'今日の学習':'通常の特訓';el.counter.textContent=target+' / '+target+'問';
         el.progressBar.style.width='100%';
-        el.questionBox.innerHTML='<span class="mini" aria-hidden="true"><span class="e l"></span><span class="e r"></span><span class="m"></span></span>'+(dailyTraining?'しあげ練習クリア！':'今日の目標クリア！');
+        el.questionBox.innerHTML='<span class="mini" aria-hidden="true"><span class="e l"></span><span class="e r"></span><span class="m"></span></span>'+(dailyTraining?'今日の30問クリア！':'通常の特訓クリア！');
         el.feedbackBox.textContent='ヒントなしで正解 '+train.correct+' / '+target+'問。\n'+trainingFinishAdvice();
         el.feedbackBox.className='feedback good';
         el.nextBtn.textContent='ホームへ戻る';el.nextBtn.classList.remove('hide');
@@ -1666,7 +1672,7 @@
         const t=trainingQuestion();u=t.choice.u;serial=t.serial;trainQuestion=t.question;
         el.unitTitle.textContent=titles[u]+' ／ '+skillTitle(u,t.choice.v);
         const block=Math.floor(train.done/trainBlockSize)+1;
-        el.counter.textContent=(dailyTraining?'しあげ練習 ・ ':'セット'+block+'/3 ・ ')+(train.done+1)+'/'+target+'問';
+        el.counter.textContent=(dailyTraining?'今日の学習 ・ ':'セット'+block+'/3 ・ ')+(train.done+1)+'/'+target+'問';
         el.progressBar.style.width=Math.round(train.done*100/target)+'%';
         train.requestedRetry=false;
       }else if(review.active){
