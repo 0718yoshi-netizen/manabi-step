@@ -54,7 +54,13 @@
     .mini .m {position:absolute;width:7px;height:4px;border-bottom:1.5px solid #533b47;border-radius:50%;top:13px;left:10.5px}
     .daily-summary {margin-top:12px}
     .focus-action {margin-top:20px}
-    .standard-practice {border-bottom:1px solid var(--line);margin-bottom:8px}
+    .archive-practice {--archive-ink:#244b69;--archive-line:#c9dce9;background:#edf5fb;border:1px solid var(--archive-line);border-left:4px solid #4f7795;border-radius:15px;padding:clamp(16px,3vw,24px)}
+    .archive-practice h2,.archive-practice .standard-practice summary {color:var(--archive-ink)}
+    .archive-practice .archive-note {margin-bottom:9px}
+    .archive-practice .course-card,.standard-practice {border-bottom:1px solid var(--archive-line)}
+    .archive-practice .btn-sub {border-color:var(--archive-line);color:var(--archive-ink)}
+    .archive-practice .btn-sub:hover {background:#dfeef9;border-color:#4f7795}
+    .standard-practice {margin-bottom:8px}
     .standard-practice[open] {padding-bottom:12px}
     .btn {min-height:44px;padding:10px 16px;border:1px solid transparent;border-radius:8px;font-weight:700}
     .btn-main,.btn-next {background:var(--rose);color:white}
@@ -162,7 +168,7 @@
       <section id="focusPractice" class="daily" aria-labelledby="focusTitle">
         <div class="daily-head">
           <div>
-            <h2 id="focusTitle" tabindex="-1">今日の学習・30問</h2>
+            <h2 id="focusTitle" tabindex="-1">今日の学習｜新しい30問</h2>
             <p class="small">マイナスの引き算15問 ＋ 連立方程式で y を求める問題15問</p>
           </div>
           <p class="daily-count" id="focusProgress">0 / 30問</p>
@@ -174,8 +180,9 @@
         <p class="small daily-summary">1問ずつ解説つき。途中で休んでも、続きから再開できます。</p>
       </section>
       <div class="home-grid">
-        <section aria-labelledby="coursesTitle">
-          <h2 id="coursesTitle">単元コースと復習</h2>
+        <section class="archive-practice" aria-labelledby="coursesTitle">
+          <h2 id="coursesTitle">前の問題集</h2>
+          <p class="small archive-note">時間があるときに、復習したいコースを選ぼう。</p>
           <details class="standard-practice">
             <summary>通常の特訓・36問</summary>
         <div class="daily-head">
@@ -984,17 +991,7 @@
       return label+'、最後までよく取り組んだね。次は「'+titles[u]+'」の「'+skillTitle(u,v)+'」を優先して復習しよう。明日また自力で解けるか確かめよう。';
     }
 
-    const japanDay = new Intl.DateTimeFormat('ja-JP',{timeZone:'Asia/Tokyo',dateStyle:'short'});
-    function prepareDailyTraining(){
-      if(train.done<trainTotal)return;
-      const completed=Date.parse(train.completedAt || train.answers.at(-1)?.time || train.startedAt);
-      if(Number.isFinite(completed) && japanDay.format(completed)!==japanDay.format(new Date())){
-        train=trainInitial();
-        saveTrain();
-      }
-    }
     function showDailyTraining(){
-      prepareDailyTraining();
       const complete=train.done>=trainTotal;
       const started=train.done>0 || Boolean(train.currentQuestion);
       const onBreak=train.done>0 && train.done%trainBlockSize===0 && train.checkpointDone!==train.done;
@@ -1071,7 +1068,6 @@
     function startTraining(){
       accrueFocus();
       endFocusPractice();
-      prepareDailyTraining();
       train.active=true;review.active=false;saveTrain();
       showStudy();
     }
@@ -1635,8 +1631,14 @@
         el.questionBox.innerHTML='<span class="mini" aria-hidden="true"><span class="e l"></span><span class="e r"></span><span class="m"></span></span>'+(dailyTraining?'今日の30問クリア！':'通常の特訓クリア！');
         el.feedbackBox.textContent='ヒントなしで正解 '+train.correct+' / '+target+'問。\n'+trainingFinishAdvice();
         el.feedbackBox.className='feedback good';
-        el.nextBtn.textContent='ホームへ戻る';el.nextBtn.classList.remove('hide');
-        el.nextBtn.onclick=()=>el.backBtn.click();return;
+        el.nextBtn.textContent=dailyTraining?'ホームへ戻る':'通常の特訓をもう一度';
+        el.nextBtn.classList.remove('hide');
+        el.nextBtn.onclick=()=>{
+          if(dailyTraining){el.backBtn.click();return;}
+          train=trainInitial();
+          startTraining();
+        };
+        return;
       }
       if(train.active&&!dailyTraining&&train.done>0&&train.done<trainTotal&&train.done%trainBlockSize===0&&train.checkpointDone!==train.done){
         const block=train.done/trainBlockSize;
