@@ -85,6 +85,11 @@
     .parent-panel {margin-top:22px;padding:4px 16px 8px}
     #parentLiveOpen,#parentLiveForm {margin-block:8px}
     #parentLiveForm label {display:block;margin:4px 0}
+    #parentLiveForm .nickname-row {align-items:center}
+    #parentLiveForm .nickname-row input {flex:1;width:auto;font-size:16px;min-height:44px}
+    #parentLiveForm .nickname-row button {flex:none;white-space:nowrap}
+    #parentLiveKeyHelp {margin-bottom:8px;overflow-wrap:anywhere}
+    #parentLiveKeyHelp a {color:inherit}
     #parentLiveStatus:not(:empty) {margin-bottom:8px}
     #openParentReport {display:inline-block}
     .parent-report {margin:7px 0 16px;padding-bottom:15px;border-bottom:1px solid var(--line)}
@@ -190,8 +195,8 @@
         </section>
         <div>
       <section class="growth-panel card" aria-label="学習の成長記録">
-        <h2 id="growthTitle">学習記録</h2>
-        <div class="growth-grid">
+        <h2 id="growthTitle" tabindex="-1">学習記録</h2>
+        <div id="growthMetrics" class="growth-grid hide">
           <div class="growth-metric"><div id="growthTime" class="growth-value">—</div><div class="growth-label" id="growthTimeLabel">学習時間</div></div>
           <div class="growth-metric"><div id="growthAnswers" class="growth-value">—</div><div class="growth-label" id="growthAnswersLabel">解いた問題</div></div>
           <div class="growth-metric"><div id="growthDays" class="growth-value">—</div><div class="growth-label">学んだ日数</div></div>
@@ -200,13 +205,14 @@
         <p id="growthAchievement" class="growth-achievement"></p>
         <p id="growthGoal" class="growth-goal"></p>
         <div class="growth-goal-track" role="progressbar" id="growthGoalTrack" aria-label="次の累計解答数の目標まで" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="growthGoalBar" class="growth-goal-bar"></div></div>
-        <p class="growth-footnote" id="growthSource">このブラウザー内の記録です。学習時間は目安です。</p>
-        <button id="parentLiveOpen" class="btn btn-sub" type="button">保護者用の最新記録を見る</button>
+        <p class="growth-footnote" id="growthSource">保護者用の記録は閲覧キーを入力すると表示されます。</p>
+        <button id="parentLiveOpen" class="btn btn-sub" type="button" aria-controls="parentLiveForm" aria-expanded="false">保護者用の最新記録を見る</button>
         <form id="parentLiveForm" class="hide" autocomplete="off">
+          <p id="parentLiveKeyHelp" class="small"><a href="https://script.google.com/home" target="_blank" rel="noopener noreferrer">Google Apps Scriptを開く</a>。対象プロジェクトの「プロジェクトの設定」→「スクリプト プロパティ」で、<code>MANABI_PARENT_VIEW_KEY</code> の<strong>値</strong>をコピーしてください。</p>
           <label for="parentLiveKey" class="small">保護者用の閲覧キー</label>
           <div class="nickname-row">
-            <input id="parentLiveKey" type="password" maxlength="64" required aria-describedby="parentLiveStatus">
-            <button class="btn btn-sub" type="submit">表示</button>
+            <input id="parentLiveKey" type="password" placeholder="64文字の値を貼り付け" spellcheck="false" autocapitalize="none" required aria-describedby="parentLiveKeyHelp parentLiveStatus">
+            <button class="btn btn-sub" type="submit">記録を表示</button>
           </div>
           <label class="small"><input id="parentLiveRemember" type="checkbox"> このブラウザーに閲覧キーを保存する</label>
         </form>
@@ -576,6 +582,7 @@
       viewerKey='';liveSummary=null;
       $('parentLiveStatus').textContent='';
       $('parentLiveForm').classList.add('hide');
+      $('parentLiveOpen').setAttribute('aria-expanded','false');
       $('parentLiveKey').value='';
       $('parentLiveRemember').checked=false;
       parentSummary=null;
@@ -599,6 +606,7 @@
     $('parentLiveOpen').onclick=()=>{
       if(viewerKey){refreshParentReport(viewerKey);return;}
       $('parentLiveForm').classList.remove('hide');
+      $('parentLiveOpen').setAttribute('aria-expanded','true');
       $('parentLiveKey').focus();
     };
     $('parentLiveForm').onsubmit=event=>{
@@ -609,10 +617,9 @@
         $('parentLiveStatus').textContent='保護者用の64文字の閲覧キーを入力してください。';
         return;
       }
-      field.value='';
-      refreshParentReport(key,$('parentLiveRemember').checked);
+      refreshParentReport(key,$('parentLiveRemember').checked,true);
     };
-    async function refreshParentReport(key,remember=false){
+    async function refreshParentReport(key,remember=false,manual=false){
       const request=++liveRequest;
       const button=$('parentLiveOpen'), status=$('parentLiveStatus');
       const form=$('parentLiveForm');
@@ -639,7 +646,8 @@
             showGrowth();
           }
           form.classList.remove('hide');
-          throw Error('閲覧キーを確認してください。');
+          button.setAttribute('aria-expanded','true');
+          throw Error('Googleの設定画面で、MANABI_PARENT_VIEW_KEYの「値」を確認してください。');
         }
         const report=data.report;
         const counts=['answers','correct','days','missingDates','missingSeconds'];
@@ -655,7 +663,10 @@
           catch(e){status.textContent='このブラウザーには閲覧キーを保存できませんでした。';}
         }
         form.classList.add('hide');
+        button.setAttribute('aria-expanded','false');
+        $('parentLiveKey').value='';
         showGrowth();
+        if(manual)$('growthTitle').focus();
         if(status.textContent==='シートの最新記録を取得しています…')status.textContent='';
       }catch(error){
         if(request===liveRequest)status.textContent=error.name==='AbortError'
@@ -839,6 +850,7 @@
       $('parentLiveOpen').textContent=liveSummary?'最新記録に更新':'保護者用の最新記録を見る';
       const st=growthData();
       const local=st.total>0||st.seconds>0;
+      $('growthMetrics').classList.toggle('hide',!imported&&!local);
       $('clearParentSummary').classList.toggle('hide',!imported&&!viewerKey);
       $('openParentReport').textContent=imported?'新しいCSVで更新する':'保護者用シートのCSVを読み込む';
       $('growthTimeLabel').textContent=imported?'回答時間':'学習時間';
@@ -868,7 +880,8 @@
       $('growthIndependent').textContent=st.total?st.correct+'問':'—';
       $('growthSource').textContent=st.total||st.seconds>0
         ?'このブラウザー内の記録です。学習時間は目安です。'
-        :'このブラウザーに集計できる学習記録はありません。';
+        :viewerKey?'登録済みの閲覧キーで、保護者用シートの記録を表示できます。'
+        :'保護者用の記録は、初回に閲覧キーを入力すると表示されます。';
       $('growthAchievement').textContent=st.corrected>0
         ?'できるようになったサイン：一度まちがえた考え方を、そのあとヒントなしで'+st.corrected+'種類正解できたよ！'
         :st.total>=10?'続けることが成長の第一歩。'+st.total+'問取り組んだ記録があるよ。'
