@@ -53,6 +53,9 @@
     .mini .l {left:8px}.mini .r {right:8px}
     .mini .m {position:absolute;width:7px;height:4px;border-bottom:1.5px solid #533b47;border-radius:50%;top:13px;left:10.5px}
     .daily-summary {margin-top:12px}
+    .focus-practice {display:flex;align-items:center;justify-content:space-between;gap:12px 20px;flex-wrap:wrap;margin-top:16px;padding:clamp(16px,3vw,24px);border-left:4px solid var(--rose)}
+    .focus-practice h2 {font-size:20px}
+    .focus-practice p {margin-top:4px}
     .btn {min-height:44px;padding:10px 16px;border:1px solid transparent;border-radius:8px;font-weight:700}
     .btn-main,.btn-next {background:var(--rose);color:white}
     .btn-main:hover,.btn-next:hover {background:var(--rose-dark)}
@@ -174,6 +177,14 @@
           <span id="dailyGuide" class="guide" aria-hidden="true"><span class="mini" aria-hidden="true"><span class="e l"></span><span class="e r"></span><span class="m"></span></span><span>ここだよ</span></span>
         </div>
         <p id="dailySummary" class="daily-summary small"></p>
+      </section>
+      <section id="focusPractice" class="focus-practice card" aria-labelledby="focusTitle">
+        <div>
+          <h2 id="focusTitle" tabindex="-1">しあげ練習・6問</h2>
+          <p class="small">マイナスの引き算3問 ＋ 連立方程式で y を求める問題3問</p>
+          <p id="focusProgress" class="small"></p>
+        </div>
+        <button id="focusBtn" class="btn btn-main" type="button">しあげ練習を始める</button>
       </section>
       <div class="home-grid">
         <section aria-labelledby="coursesTitle">
@@ -317,22 +328,38 @@
     const trainInitial=()=>({active:false,done:0,attempts:0,correct:0,streak:0,seed:Date.now()%1000000,
       recent:[],retry:[],unit:0,variant:0,lastRight:true,lastHint:false,requestedRetry:false,
       checkpointDone:0,startedAt:new Date().toISOString(),completedAt:null,currentQuestion:null,answers:[]});
-    let train=trainInitial();
-    try{
-      const saved=JSON.parse(localStorage.getItem(trainKey));
-      if(saved&&Number.isInteger(saved.done)&&saved.done>=0&&saved.done<=trainTotal&&
-         Number.isInteger(saved.attempts)&&saved.attempts>=0&&saved.attempts<=trainTotal+10&&
-         Number.isInteger(saved.correct)&&saved.correct>=0&&saved.correct<=trainTotal){
-        train={...trainInitial(),...saved,active:false,requestedRetry:false};
-        if(!Array.isArray(train.recent))train.recent=[];
-        if(!Array.isArray(train.retry))train.retry=[];
-        if(!Array.isArray(train.answers))train.answers=[];
-        if(!Number.isInteger(train.checkpointDone))train.checkpointDone=0;
-        // 旧版では解説の途中で閉じると、同じ進行位置に複数の解答が残ることがあった。
-        if(!train.currentQuestion && train.answers.length>train.done)train.answers.length=train.done;
-      }
-    }catch(e){}
-    function saveTrain(){try{localStorage.setItem(trainKey,JSON.stringify(train))}catch(e){}}
+    const focusPracticeKey='manabi-step-focus-practice-v1';
+    const focusSkills=[{u:1,v:2},{u:1,v:2},{u:1,v:2},{u:9,v:1},{u:9,v:1},{u:9,v:1}];
+    function loadTraining(storageKey,total){
+      try{
+        const saved=JSON.parse(localStorage.getItem(storageKey));
+        if(saved&&Number.isInteger(saved.done)&&saved.done>=0&&saved.done<=total&&
+           Number.isInteger(saved.attempts)&&saved.attempts>=0&&saved.attempts<=total+10&&
+           Number.isInteger(saved.correct)&&saved.correct>=0&&saved.correct<=total){
+          const progress={...trainInitial(),...saved,active:false,requestedRetry:false};
+          if(!Array.isArray(progress.recent))progress.recent=[];
+          if(!Array.isArray(progress.retry))progress.retry=[];
+          if(!Array.isArray(progress.answers))progress.answers=[];
+          if(!Number.isInteger(progress.checkpointDone))progress.checkpointDone=0;
+          // 旧版は解説中に閉じると、同じ進行位置に複数の解答が残ることがあった。
+          if(!progress.currentQuestion&&progress.answers.length>progress.done)progress.answers.length=progress.done;
+          return progress;
+        }
+      }catch(e){}
+      return trainInitial();
+    }
+    let train=loadTraining(trainKey,trainTotal), dailyTraining=null;
+    let focusPractice=loadTraining(focusPracticeKey,focusSkills.length);
+    function saveTrain(){
+      try{localStorage.setItem(dailyTraining?focusPracticeKey:trainKey,JSON.stringify(train))}catch(e){}
+    }
+    function endFocusPractice(){
+      if(!dailyTraining)return;
+      train.active=false;
+      saveTrain();
+      train=dailyTraining;
+      dailyTraining=null;
+    }
 
     const reviewKey='manabi-step-review-progress-v1';
     const reviewInitial=()=>({active:false,done:0,attempts:0,correct:0,streak:0,retryUnit:-1,unit:0,lastRight:true});
@@ -944,7 +971,7 @@
     function trainingFinishAdvice(){
       const mistakes=train.answers.filter(a=>!a.correct||a.hint);
       const label=learnerName();
-      if(!mistakes.length)return label+'、36問すべて自力でできたね。明日も違う数字で確認すると力がつくよ。';
+      if(!mistakes.length)return label+'、'+(dailyTraining?focusSkills.length:trainTotal)+'問すべて自力でできたね。明日も違う数字で確認すると力がつくよ。';
       const count=new Map();
       for(const x of mistakes){const k=x.u*5+x.v;count.set(k,(count.get(k)||0)+1)}
       const key=[...count].sort((a,b)=>b[1]-a[1])[0][0],u=Math.floor(key/5),v=key%5;
@@ -1014,7 +1041,7 @@
     }
     function trainingQuestion(){
       if(!train.currentQuestion){
-        const choice=pickTrainingSkill();
+        const choice=dailyTraining?focusSkills[train.done]:pickTrainingSkill();
         const serial=train.seed+train.done*47+choice.u*31+choice.v*13+train.attempts*7;
         train.currentQuestion={u:choice.u,v:choice.v,serial,hint:false,response:null};
         saveTrain();
@@ -1038,8 +1065,17 @@
     }
     function startTraining(){
       accrueFocus();
+      endFocusPractice();
       prepareDailyTraining();
       train.active=true;review.active=false;saveTrain();
+      showStudy();
+    }
+    function startFocusPractice(){
+      accrueFocus();
+      endFocusPractice();
+      dailyTraining=train;
+      train=focusPractice;
+      train.active=true;review.active=false;
       showStudy();
     }
     function rankWeakUnits(){
@@ -1078,6 +1114,9 @@
         '苦手の候補：「'+titles[weak[0]]+'」から優先して練習するよ。'+suffix:
         'まだ苦手の記録が少ないので、まずは基礎から練習するよ。'+suffix;
       showDailyTraining();
+      const finish=focusPractice.done===focusSkills.length;
+      $('focusProgress').textContent=focusPractice.done+' / '+focusSkills.length+'問';
+      $('focusBtn').textContent=finish?'しあげ練習の結果を見る':focusPractice.currentQuestion||focusPractice.done?'しあげ練習の続きから':'しあげ練習を始める';
       showCoach();showGrowth();
       $('course1Status').textContent=courseStatus(1);
       $('course2Status').textContent=courseStatus(2);
@@ -1582,17 +1621,18 @@
       $('trainHintPanel').classList.add('hide');$('trainHintText').classList.add('hide');
       $('trainAgainBtn').classList.add('hide');
       $('studySheet').classList.remove('milestone');
-      if(train.active&&train.done>=trainTotal){
+      const target=dailyTraining?focusSkills.length:trainTotal;
+      if(train.active&&train.done>=target){
         $('studySheet').classList.add('milestone');
-        el.unitTitle.textContent='今日の学習';el.counter.textContent='36 / 36問';
+        el.unitTitle.textContent=dailyTraining?'しあげ練習':'今日の学習';el.counter.textContent=target+' / '+target+'問';
         el.progressBar.style.width='100%';
-        el.questionBox.innerHTML='<span class="mini" aria-hidden="true"><span class="e l"></span><span class="e r"></span><span class="m"></span></span>今日の目標クリア！';
-        el.feedbackBox.textContent='ヒントなしで正解 '+train.correct+' / '+trainTotal+'問。\n'+trainingFinishAdvice();
+        el.questionBox.innerHTML='<span class="mini" aria-hidden="true"><span class="e l"></span><span class="e r"></span><span class="m"></span></span>'+(dailyTraining?'しあげ練習クリア！':'今日の目標クリア！');
+        el.feedbackBox.textContent='ヒントなしで正解 '+train.correct+' / '+target+'問。\n'+trainingFinishAdvice();
         el.feedbackBox.className='feedback good';
         el.nextBtn.textContent='ホームへ戻る';el.nextBtn.classList.remove('hide');
         el.nextBtn.onclick=()=>el.backBtn.click();return;
       }
-      if(train.active&&train.done>0&&train.done<trainTotal&&train.done%trainBlockSize===0&&train.checkpointDone!==train.done){
+      if(train.active&&!dailyTraining&&train.done>0&&train.done<trainTotal&&train.done%trainBlockSize===0&&train.checkpointDone!==train.done){
         const block=train.done/trainBlockSize;
         $('studySheet').classList.add('milestone');
         el.unitTitle.textContent=block+'セット完了';el.counter.textContent=train.done+' / '+trainTotal+'問';
@@ -1626,8 +1666,8 @@
         const t=trainingQuestion();u=t.choice.u;serial=t.serial;trainQuestion=t.question;
         el.unitTitle.textContent=titles[u]+' ／ '+skillTitle(u,t.choice.v);
         const block=Math.floor(train.done/trainBlockSize)+1;
-        el.counter.textContent='セット'+block+'/3 ・ '+(train.done+1)+'/'+trainTotal+'問';
-        el.progressBar.style.width=Math.round(train.done*100/trainTotal)+'%';
+        el.counter.textContent=(dailyTraining?'しあげ練習 ・ ':'セット'+block+'/3 ・ ')+(train.done+1)+'/'+target+'問';
+        el.progressBar.style.width=Math.round(train.done*100/target)+'%';
         train.requestedRetry=false;
       }else if(review.active){
         u=reviewUnitAt(review.done);serial=state.serial+109+review.done*17+review.attempts*11;
@@ -1665,7 +1705,7 @@
     function advance(){
       if(!pending)return;accrueFocus();stopAuto();pending=false;
       if(train.active){
-        if(!train.lastRight||train.lastHint||train.requestedRetry){
+        if(!dailyTraining&&(!train.lastRight||train.lastHint||train.requestedRetry)){
           const skill=train.unit*5+train.variant;
           // 同じ考え方は他の問題をはさんでから、数字を変えて出し直す。
           const already=train.retry.some(x=>x.key===skill);
@@ -1675,7 +1715,7 @@
         if(train.recent.length>6)train.recent=train.recent.slice(-6);
         train.done++;
         train.currentQuestion=null;
-        if(train.done===trainTotal)train.completedAt=new Date().toISOString();
+        if(train.done===(dailyTraining?focusSkills.length:trainTotal))train.completedAt=new Date().toISOString();
         saveTrain();renderStudyStep();return;
       }
       if(review.active){
@@ -1727,20 +1767,21 @@
       if(train.active)$('trainHintBtn').disabled=true;
       showExplanation(right,selected,active,active.unit,active.serial);
       el.nextBtn.textContent=train.active?'解説を読んで次へ →':right?(review.active?'次の復習問題へ →':'次の問題へ →'):(review.active?'別の数字で再挑戦 →':'解説を読んで類題へ →');
-      if(train.active)$('trainAgainBtn').classList.remove('hide');
+      if(train.active&&!dailyTraining)$('trainAgainBtn').classList.remove('hide');
       el.nextBtn.classList.remove('hide');el.nextBtn.onclick=advance;
       // 解説を読んでいる時間も学習時間に含める。
       resumeFocus();
       // 学習者が途中式を読み終えるまで待つ。勝手に次の問題へ進めない。
     }
     function start(n=1){
-      accrueFocus();stopAuto();chooseCourse(n);review.active=false;train.active=false;
+      accrueFocus();stopAuto();endFocusPractice();chooseCourse(n);review.active=false;train.active=false;
       showStudy();
     }
     el.startBtn.onclick=()=>start(1);
     $('startCourse2Btn').onclick=()=>start(2);
     $('reviewBtn').onclick=()=>{train.active=false;startReview(false)};
     $('trainBtn').onclick=startTraining;
+    $('focusBtn').onclick=startFocusPractice;
     $('saveNickname').onclick=()=>{
       const name=String($('nicknameInput').value||'').trim().slice(0,16);
       try{
@@ -1765,7 +1806,12 @@
       if(!train.active||!pending)return;
       train.requestedRetry=true;saveTrain();advance();
     };
-    el.backBtn.onclick=()=>{accrueFocus();stopAuto();pending=false;review.active=false;train.active=false;saveReview();saveTrain();showIntro();$('todayTitle').focus({preventScroll:true});window.scrollTo(0,0)};
+    el.backBtn.onclick=()=>{
+      accrueFocus();stopAuto();pending=false;review.active=false;train.active=false;
+      const returnHeading=dailyTraining?'focusTitle':'todayTitle';
+      if(dailyTraining)endFocusPractice();else saveTrain();
+      saveReview();showIntro();$(returnHeading).focus();
+    };
     window.manabiStart=start;
     window.addEventListener('error',function(){
       // エラーが起きたら娘さんが見える形で伝え、再試行できるようにする。
