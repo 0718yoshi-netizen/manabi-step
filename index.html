@@ -188,16 +188,17 @@
       <section class="growth-panel card" aria-label="学習の成長記録">
         <h2 id="growthTitle">学習記録</h2>
         <div class="growth-grid">
-          <div class="growth-metric"><div id="growthTime" class="growth-value">—</div><div class="growth-label">学習時間</div></div>
-          <div class="growth-metric"><div id="growthAnswers" class="growth-value">—</div><div class="growth-label">解いた問題</div></div>
+          <div class="growth-metric"><div id="growthTime" class="growth-value">—</div><div class="growth-label" id="growthTimeLabel">学習時間</div></div>
+          <div class="growth-metric"><div id="growthAnswers" class="growth-value">—</div><div class="growth-label" id="growthAnswersLabel">解いた問題</div></div>
           <div class="growth-metric"><div id="growthDays" class="growth-value">—</div><div class="growth-label">学んだ日数</div></div>
-          <div class="growth-metric"><div id="growthIndependent" class="growth-value">—</div><div class="growth-label">ヒントなし正解</div></div>
+          <div class="growth-metric"><div id="growthIndependent" class="growth-value">—</div><div class="growth-label" id="growthCorrectLabel">ヒントなし正解</div></div>
         </div>
         <p id="growthAchievement" class="growth-achievement"></p>
         <p id="growthGoal" class="growth-goal"></p>
         <div class="growth-goal-track" role="progressbar" id="growthGoalTrack" aria-label="次の累計解答数の目標まで" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="growthGoalBar" class="growth-goal-bar"></div></div>
         <p class="growth-footnote" id="growthSource">このブラウザー内の記録です。学習時間は目安です。</p>
-        <a href="#parentSettings" id="openParentReport" class="small">保護者用シートの記録を確認する</a>
+        <a href="#parentSettings" id="openParentReport" class="small">保護者用シートのCSVを読み込む</a>
+        <button id="clearParentSummary" type="button" class="btn btn-sub hide">シートの集計を表示から外す</button>
       </section>
       <details class="coach-panel card">
         <summary id="coachTitle">学習アドバイス</summary>
@@ -249,7 +250,7 @@
       <summary>保護者向け｜学習記録の保存・連携</summary>
       <section class="parent-report" aria-labelledby="parentReportTitle">
         <h3 id="parentReportTitle">シートの学習記録を確認</h3>
-        <p class="small" id="parentFileHelp">Googleスプレッドシートの「回答ログ」タブをCSVでダウンロードし、ここで開いてください。集計はこの画面内で行います。</p>
+        <p class="small" id="parentFileHelp">Googleスプレッドシートの「回答ログ」タブをCSVでダウンロードし、ここで開くと、ホームの「学習記録」に反映されます。集計結果だけをこのブラウザーに保存します。</p>
         <label for="parentLogFile">回答ログのCSVファイル</label>
         <input id="parentLogFile" type="file" accept=".csv,text/csv" aria-describedby="parentFileHelp">
         <p id="parentReportStatus" class="small" role="status"></p>
@@ -538,7 +539,34 @@
       }
       return {answers:seen.size,correct,days:days.size,seconds,missingDates,missingSeconds};
     }
+    const parentSummaryKey='manabi-step-parent-summary-v1';
+    let parentSummary=null;
+    try{
+      const saved=JSON.parse(localStorage.getItem(parentSummaryKey));
+      const counts=['answers','correct','days','missingDates','missingSeconds'];
+      if(saved && counts.every(name=>Number.isSafeInteger(saved[name])&&saved[name]>=0) &&
+        saved.answers>0 && counts.slice(1).every(name=>saved[name]<=saved.answers) &&
+        Number.isFinite(saved.seconds)&&saved.seconds>=0 &&
+        Number.isFinite(Date.parse(saved.importedAt)))parentSummary=saved;
+    }catch(e){}
     $('openParentReport').onclick=()=>{$('parentSettings').open=true;};
+    $('clearParentSummary').onclick=()=>{
+      try{localStorage.removeItem(parentSummaryKey);}
+      catch(e){$('parentReportStatus').textContent='集計の保存を解除できませんでした。';return;}
+      reportSelection++;
+      parentSummary=null;
+      $('parentLogFile').value='';
+      $('parentReportValues').classList.add('hide');
+      $('parentTimeNote').classList.add('hide');
+      $('parentReportStatus').textContent='';
+      showGrowth();
+      $('openParentReport').focus();
+    };
+    function parentDuration(data){
+      if(data.missingSeconds===data.answers)return '記録なし';
+      const seconds=Math.round(data.seconds);
+      return Math.floor(seconds/60)+'分'+seconds%60+'秒';
+    }
     let reportSelection=0;
     $('parentLogFile').onchange=async event=>{
       const request=++reportSelection;
@@ -554,15 +582,19 @@
         const data=summarizeParentLog(await file.text());
         if(request!==reportSelection)return;
         if(!data.answers){status.textContent='このCSVには集計対象の回答がありません。';return;}
-        const seconds=Math.round(data.seconds);
+        parentSummary={...data,importedAt:new Date().toISOString()};
+        let saved=true;
+        try{localStorage.setItem(parentSummaryKey,JSON.stringify(parentSummary));}
+        catch(e){saved=false;}
+        showGrowth();
         $('parentAnswers').textContent=data.answers+'回';
         $('parentCorrect').textContent=data.correct+'回';
         $('parentDays').textContent=data.missingDates?'日付がある分で '+data.days+'日':data.days+'日';
-        $('parentSeconds').textContent=data.missingSeconds===data.answers?'記録なし'
-          :Math.floor(seconds/60)+'分'+seconds%60+'秒';
+        $('parentSeconds').textContent=parentDuration(data);
         timeNote.textContent='回答時間には、解説を読む時間は含まれません。'+
           (data.missingSeconds&&data.missingSeconds<data.answers?' 秒数が記録された回答のみの合計です。':'');
-        status.textContent='保護者用シートの集計を表示しています。';
+        status.textContent=saved?'ホームの「学習記録」に反映しました。'
+          :'ホームの「学習記録」に反映しました。このブラウザーを閉じる前に確認してください。';
         values.classList.remove('hide');timeNote.classList.remove('hide');
       }catch(error){
         if(request===reportSelection)status.textContent=error instanceof Error?error.message:'CSVを読み込めませんでした。';
@@ -702,7 +734,31 @@
       return '次の目標は累計'+target+'問まで、あと'+(target-n)+'問。今日は焦らず、自分で考える時間を大事にしよう。';
     }
     function showGrowth(){
+      const source=$('growthSource');
+      const imported=Boolean(parentSummary);
       const st=growthData();
+      const local=st.total>0||st.seconds>0;
+      $('clearParentSummary').classList.toggle('hide',!imported);
+      $('openParentReport').textContent=imported?'新しいCSVで更新する':'保護者用シートのCSVを読み込む';
+      $('growthTimeLabel').textContent=imported?'回答時間':'学習時間';
+      $('growthAnswersLabel').textContent=imported?'回答数':'解いた問題';
+      $('growthCorrectLabel').textContent=imported?'正解数':'ヒントなし正解';
+      $('growthAchievement').classList.toggle('hide',imported||!local);
+      $('growthGoal').classList.toggle('hide',imported||!local);
+      $('growthGoalTrack').classList.toggle('hide',imported||!local);
+      if(imported){
+        const data=parentSummary;
+        $('growthTitle').textContent='学習記録';
+        $('growthTime').textContent=parentDuration(data);
+        $('growthAnswers').textContent=data.answers+'回';
+        $('growthDays').textContent=data.days+'日';
+        $('growthIndependent').textContent=data.correct+'回';
+        source.textContent='保護者用シートの集計（'+new Date(data.importedAt).toLocaleDateString('ja-JP',{timeZone:'Asia/Tokyo'})+
+          ' 読み込み）。回答時間には解説を読む時間は含まれません。'+
+          (data.missingDates?' 学習日数は日付がある回答分です。':'')+
+          (data.missingSeconds&&data.missingSeconds<data.answers?' 回答時間は秒数がある回答分です。':'');
+        return;
+      }
       $('growthTitle').textContent=(learnerName()==='あなた'?'学習記録':learnerName()+'の学習記録');
       $('growthTime').textContent=st.seconds>0?focusLabel(st.seconds):'—';
       $('growthAnswers').textContent=st.total?st.total+'問':'—';
