@@ -67,6 +67,7 @@ function doPost(e) {
     const raw = String((e && e.postData && e.postData.contents) || '');
     if (!raw || raw.length > 50000) return json_({ok: false});
     const data = JSON.parse(raw);
+    if (data && data.action === 'parentSummary') return parentReport_(data.key);
     const batch = String(data.batch || '');
     const events = data.events;
     if (!/^[a-zA-Z0-9_-]{8,180}$/.test(batch) ||
@@ -123,4 +124,46 @@ function doPost(e) {
     console.error('まなびステップの受信処理エラー', error);
     return json_({ok: false});
   }
+}
+
+// Run once from the editor. Copy the key from Project Settings > Script properties.
+function setupParentReport() {
+  const properties = PropertiesService.getScriptProperties();
+  if (!properties.getProperty('MANABI_PARENT_VIEW_KEY')) {
+    properties.setProperty('MANABI_PARENT_VIEW_KEY',
+      (Utilities.getUuid() + Utilities.getUuid()).replace(/-/g, ''));
+  }
+}
+
+function parentReport_(key) {
+  const expected = PropertiesService.getScriptProperties().getProperty('MANABI_PARENT_VIEW_KEY');
+  if (!expected) return json_({ok: false, code: 'not_configured'});
+  if (!/^[a-f0-9]{64}$/.test(String(key || ''))) return json_({ok: false, code: 'denied'});
+  const hash = value => Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, value);
+  const supplied = hash(key), stored = hash(expected);
+  let difference = 0;
+  for (let i = 0; i < stored.length; i++) difference |= supplied[i] ^ stored[i];
+  if (difference) return json_({ok: false, code: 'denied'});
+  const target = sheetBook_().getSheetByName(LOG_TAB);
+  const count = target.getLastRow() - 1;
+  const rows = count > 0 ? target.getRange(2, 1, count, 12).getValues() : [];
+  const events = new Set(), dates = new Set();
+  let correct = 0, seconds = 0, missingDates = 0, missingSeconds = 0;
+  for (const row of rows) {
+    const [time, id, , , unit, , , , , , result, duration] = row;
+    const number = Number(unit);
+    if (!id || events.has(id) || !Number.isInteger(number) || number < 1 || number > 12 ||
+        (result !== '正解' && result !== '不正解')) continue;
+    events.add(id);
+    if (result === '正解') correct++;
+    const day = time instanceof Date && !isNaN(time)
+      ? Utilities.formatDate(time, 'Asia/Tokyo', 'yyyy-MM-dd')
+      : String(time).match(/^\d{4}-\d{2}-\d{2}/)?.[0];
+    if (day) dates.add(day); else missingDates++;
+    if (duration !== '' && Number.isFinite(Number(duration)) && Number(duration) >= 0) {
+      seconds += Number(duration);
+    } else missingSeconds++;
+  }
+  return json_({ok: true, report: {answers: events.size, correct, days: dates.size,
+    seconds, missingDates, missingSeconds, importedAt: new Date().toISOString()}});
 }
