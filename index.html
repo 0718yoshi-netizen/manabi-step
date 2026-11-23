@@ -83,6 +83,10 @@
     .nickname-row {display:flex;gap:8px}
     .nickname-row input,.parent-panel input {min-width:0;width:100%;border:1px solid #bfb7b8;border-radius:8px;padding:9px;background:white;color:var(--ink)}
     .parent-panel {margin-top:22px;padding:4px 16px 8px}
+    #parentLiveOpen,#parentLiveForm {margin-block:8px}
+    #parentLiveForm label {display:block;margin:4px 0}
+    #parentLiveStatus:not(:empty) {margin-bottom:8px}
+    #openParentReport {display:inline-block}
     .parent-report {margin:7px 0 16px;padding-bottom:15px;border-bottom:1px solid var(--line)}
     .parent-report h3 {margin-bottom:5px}
     .parent-report input[type="file"] {margin-bottom:6px;color:var(--ink)}
@@ -197,6 +201,16 @@
         <p id="growthGoal" class="growth-goal"></p>
         <div class="growth-goal-track" role="progressbar" id="growthGoalTrack" aria-label="次の累計解答数の目標まで" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="growthGoalBar" class="growth-goal-bar"></div></div>
         <p class="growth-footnote" id="growthSource">このブラウザー内の記録です。学習時間は目安です。</p>
+        <button id="parentLiveOpen" class="btn btn-sub" type="button">保護者用の最新記録を見る</button>
+        <form id="parentLiveForm" class="hide" autocomplete="off">
+          <label for="parentLiveKey" class="small">保護者用の閲覧キー</label>
+          <div class="nickname-row">
+            <input id="parentLiveKey" type="password" maxlength="64" required aria-describedby="parentLiveStatus">
+            <button class="btn btn-sub" type="submit">表示</button>
+          </div>
+          <label class="small"><input id="parentLiveRemember" type="checkbox"> このブラウザーに閲覧キーを保存する</label>
+        </form>
+        <p id="parentLiveStatus" class="small" role="status"></p>
         <a href="#parentSettings" id="openParentReport" class="small">保護者用シートのCSVを読み込む</a>
         <button id="clearParentSummary" type="button" class="btn btn-sub hide">シートの集計を表示から外す</button>
       </section>
@@ -554,6 +568,16 @@
       try{localStorage.removeItem(parentSummaryKey);}
       catch(e){$('parentReportStatus').textContent='集計の保存を解除できませんでした。';return;}
       reportSelection++;
+      liveRequest++;
+      if(viewerKey){
+        try{localStorage.removeItem(viewerKeyStorage);}
+        catch(e){$('parentLiveStatus').textContent='閲覧キーの保存を解除できませんでした。';return;}
+      }
+      viewerKey='';liveSummary=null;
+      $('parentLiveStatus').textContent='';
+      $('parentLiveForm').classList.add('hide');
+      $('parentLiveKey').value='';
+      $('parentLiveRemember').checked=false;
       parentSummary=null;
       $('parentLogFile').value='';
       $('parentReportValues').classList.add('hide');
@@ -566,6 +590,82 @@
       if(data.missingSeconds===data.answers)return '記録なし';
       const seconds=Math.round(data.seconds);
       return Math.floor(seconds/60)+'分'+seconds%60+'秒';
+    }
+    const viewerKeyStorage='manabi-step-parent-view-key-v1';
+    let viewerKey='';
+    let liveSummary=null;
+    let liveRequest=0;
+    try {viewerKey=localStorage.getItem(viewerKeyStorage)||'';}catch(e){}
+    $('parentLiveOpen').onclick=()=>{
+      if(viewerKey){refreshParentReport(viewerKey);return;}
+      $('parentLiveForm').classList.remove('hide');
+      $('parentLiveKey').focus();
+    };
+    $('parentLiveForm').onsubmit=event=>{
+      event.preventDefault();
+      const field=$('parentLiveKey');
+      const key=field.value.trim();
+      if(!/^[a-f0-9]{64}$/.test(key)){
+        $('parentLiveStatus').textContent='保護者用の64文字の閲覧キーを入力してください。';
+        return;
+      }
+      field.value='';
+      refreshParentReport(key,$('parentLiveRemember').checked);
+    };
+    async function refreshParentReport(key,remember=false){
+      const request=++liveRequest;
+      const button=$('parentLiveOpen'), status=$('parentLiveStatus');
+      const form=$('parentLiveForm');
+      const wasSaved=viewerKey===key;
+      status.textContent='シートの最新記録を取得しています…';
+      button.disabled=true;
+      const submit=form.querySelector('button');
+      submit.disabled=true;
+      const controller=new AbortController();
+      const timeout=setTimeout(()=>controller.abort(),12000);
+      try{
+        const response=await fetch(window.MANABI_LOG_ENDPOINT,{
+          method:'POST',headers:{'Content-Type':'text/plain;charset=UTF-8'},
+          body:JSON.stringify({action:'parentSummary',key}),credentials:'omit',
+          cache:'no-store',signal:controller.signal
+        });
+        if(!response.ok)throw Error('シートに接続できませんでした。');
+        const data=await response.json();
+        if(request!==liveRequest)return;
+        if(data.code==='denied'){
+          if(wasSaved){
+            viewerKey='';liveSummary=null;
+            try{localStorage.removeItem(viewerKeyStorage);}catch(e){}
+            showGrowth();
+          }
+          form.classList.remove('hide');
+          throw Error('閲覧キーを確認してください。');
+        }
+        const report=data.report;
+        const counts=['answers','correct','days','missingDates','missingSeconds'];
+        if(!data.ok||!report||!counts.every(name=>Number.isSafeInteger(report[name])&&report[name]>=0)||
+          !counts.slice(1).every(name=>report[name]<=report.answers)||
+          !Number.isFinite(report.seconds)||report.seconds<0||!Number.isFinite(Date.parse(report.importedAt))){
+          throw Error('シートの集計を取得できませんでした。');
+        }
+        liveSummary=report;
+        viewerKey=key;
+        if(remember){
+          try{localStorage.setItem(viewerKeyStorage,key);}
+          catch(e){status.textContent='このブラウザーには閲覧キーを保存できませんでした。';}
+        }
+        form.classList.add('hide');
+        showGrowth();
+        if(status.textContent==='シートの最新記録を取得しています…')status.textContent='';
+      }catch(error){
+        if(request===liveRequest)status.textContent=error.name==='AbortError'
+          ?'応答がありません。もう一度更新してください。'
+          :error instanceof Error && error.message.includes('。')?error.message:'シートに接続できませんでした。もう一度お試しください。';
+      }finally{
+        clearTimeout(timeout);
+        button.disabled=false;
+        submit.disabled=false;
+      }
     }
     let reportSelection=0;
     $('parentLogFile').onchange=async event=>{
@@ -735,10 +835,11 @@
     }
     function showGrowth(){
       const source=$('growthSource');
-      const imported=Boolean(parentSummary);
+      const imported=Boolean(liveSummary||parentSummary);
+      $('parentLiveOpen').textContent=liveSummary?'最新記録に更新':'保護者用の最新記録を見る';
       const st=growthData();
       const local=st.total>0||st.seconds>0;
-      $('clearParentSummary').classList.toggle('hide',!imported);
+      $('clearParentSummary').classList.toggle('hide',!imported&&!viewerKey);
       $('openParentReport').textContent=imported?'新しいCSVで更新する':'保護者用シートのCSVを読み込む';
       $('growthTimeLabel').textContent=imported?'回答時間':'学習時間';
       $('growthAnswersLabel').textContent=imported?'回答数':'解いた問題';
@@ -747,14 +848,15 @@
       $('growthGoal').classList.toggle('hide',imported||!local);
       $('growthGoalTrack').classList.toggle('hide',imported||!local);
       if(imported){
-        const data=parentSummary;
+        const data=liveSummary||parentSummary;
         $('growthTitle').textContent='学習記録';
         $('growthTime').textContent=parentDuration(data);
         $('growthAnswers').textContent=data.answers+'回';
         $('growthDays').textContent=data.days+'日';
         $('growthIndependent').textContent=data.correct+'回';
-        source.textContent='保護者用シートの集計（'+new Date(data.importedAt).toLocaleDateString('ja-JP',{timeZone:'Asia/Tokyo'})+
-          ' 読み込み）。回答時間には解説を読む時間は含まれません。'+
+        source.textContent=(liveSummary?'保護者用シートから取得（':'CSVから読み込み（')+
+          new Date(data.importedAt).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})+
+          '）。回答時間には解説を読む時間は含まれません。'+
           (data.missingDates?' 学習日数は日付がある回答分です。':'')+
           (data.missingSeconds&&data.missingSeconds<data.answers?' 回答時間は秒数がある回答分です。':'');
         return;
@@ -1659,6 +1761,7 @@
       }
     });
     showIntro();
+    if(viewerKey)refreshParentReport(viewerKey);
   })();
   </script>
 </body>
