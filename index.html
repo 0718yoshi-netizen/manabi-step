@@ -165,23 +165,22 @@
     </header>
 
     <section id="intro" aria-label="学習ホーム">
-      <section id="focusPractice" class="daily" aria-labelledby="focusTitle">
+      <section class="daily" aria-labelledby="nextPracticeTitle">
         <div class="daily-head">
           <div>
-            <h2 id="focusTitle" tabindex="-1">今日の学習｜新しい30問</h2>
-            <p class="small">マイナスの引き算15問 ＋ 連立方程式で y を求める問題15問</p>
+            <h2 id="nextPracticeTitle" tabindex="-1">今日の学習｜途中式をつなぐ30問</h2>
+            <p class="small">正負の数の引き算と連立方程式を、10問ずつ3セットで練習しよう。</p>
           </div>
-          <p class="daily-count" id="focusProgress">0 / 30問</p>
+          <p class="daily-count" id="nextPracticeProgress">0 / 30問</p>
         </div>
-        <div class="daily-action focus-action">
-          <button id="focusBtn" class="btn btn-main" type="button">今日の30問を始める</button>
-          <span id="focusGuide" class="guide" aria-hidden="true"><span class="mini" aria-hidden="true"><span class="e l"></span><span class="e r"></span><span class="m"></span></span><span>ここだよ</span></span>
+        <div class="daily-action">
+          <button id="nextPracticeBtn" class="btn btn-main" type="button">新しい30問を始める</button>
         </div>
-        <p class="small daily-summary">1問ずつ解説つき。途中で休んでも、続きから再開できます。</p>
+        <p class="small daily-summary">各セットの最初に例題があります。途中で休んでも続きから再開できます。</p>
       </section>
       <div class="home-grid">
         <section class="archive-practice" aria-labelledby="coursesTitle">
-          <h2 id="coursesTitle">前の問題集</h2>
+          <h2 id="coursesTitle" tabindex="-1">前の問題集</h2>
           <p class="small archive-note">時間があるときに、復習したいコースを選ぼう。</p>
           <details class="standard-practice">
             <summary>通常の特訓・36問</summary>
@@ -214,7 +213,10 @@
             <div><h3>苦手の復習</h3><p id="reviewSummary" class="small"></p></div>
             <button id="reviewBtn" class="btn btn-sub" type="button" aria-label="苦手の復習10問を開く">10問 →</button>
           </div>
-          <p class="upcoming">応用コースは準備中</p>
+          <div class="course-card">
+            <div><h3 id="focusTitle" tabindex="-1">前回の30問</h3><p class="small">マイナスの引き算と連立方程式</p><p id="focusProgress" class="course-progress"></p></div>
+            <button id="focusBtn" class="btn btn-sub" type="button">開く →</button>
+          </div>
           <p id="resumeText" class="small"></p>
         </section>
         <div>
@@ -343,6 +345,82 @@
       checkpointDone:0,startedAt:new Date().toISOString(),completedAt:null,currentQuestion:null,answers:[]});
     const focusPracticeKey='manabi-step-focus-practice-v1';
     const focusSkills=Array.from({length:30},(_,i)=>i%6<3?{u:1,v:2}:{u:9,v:1});
+    const nextPracticeKey='manabi-step-step-by-step-v1';
+    const nextPracticeLessons=[
+      {title:'引き算を足し算に直す', example:'(−7) − (−3) = (−7) + 3 = −4。引く数の符号だけを変えよう。'},
+      {title:'連立方程式で y を求める', example:'① x + y = 9、② x − y = 3。① − ② で x が消えて 2y = 6。両辺を 2 で割ると y = 3。'},
+      {title:'途中式を自分でつなぐ', example:'① x + y = 6、② x − y = −2。右辺は 6 − (−2) = 8。よって 2y = 8、y = 4。'}
+    ];
+    // 各セットで途中の一手を練習し、最後のセットは問題を混ぜて確認する。
+    const nextPracticeItems=[
+      ['rewrite',-6,-4],['rewrite',-5,3],['rewrite',8,-2],['rewrite',4,7],
+      ['subtract',-3,-8],['subtract',-9,-5],['subtract',-8,-8],
+      ['subtract',-7,4],['subtract',3,-6],['subtract',-12,-9],
+      ['eliminate'],['double',7,2],['double',10,3],['double',9,6],
+      ['divide',8],['divide',-6],['solve',3,5],['solve',3,-2],['solve',5,0],['solve',7,-3],
+      ['subtract',-5,-9],['solve',4,3],['subtract',-11,-4],['solve',2,5],
+      ['subtract',-4,6],['solve',12,5],['subtract',6,-8],['solve',-2,-1],
+      ['subtract',-9,-9],['solve',-2,-5]
+    ];
+    function nextPracticeQuestion(index){
+      const [kind,a,b]=nextPracticeItems[index];
+      const subtract=kind==='rewrite'||kind==='subtract';
+      const u=subtract?1:9;
+      const v=subtract?(b<0?(a<0?2:3):(a<0?1:0)):1;
+      const term=n=>n<0?'('+fmt(n)+')':String(n);
+      const minus=(m,n)=>term(m)+' − '+term(n);
+      const plus=(m,n)=>term(m)+' + '+term(n);
+      let q,answer,distractors,steps;
+      switch(kind){
+        case 'rewrite':
+          q=minus(a,b)+' を足し算に直すと？';
+          answer=plus(a,-b);
+          distractors=[plus(a,b),plus(-a,-b),plus(-a,b)];
+          steps=['最初の数はそのまま。引く数の符号を反対にしよう。',minus(a,b)+' = '+answer+'。'];
+          break;
+        case 'subtract':
+          q=minus(a,b)+' = ?';
+          answer=a-b;
+          distractors=[a+b,b-a,-a-b];
+          steps=['引く数の符号を反対にして、足し算に直す。',minus(a,b)+' = '+plus(a,-b)+' = '+fmt(answer)+'。'];
+          break;
+        case 'eliminate':
+          q='① x + y = 8、② x − y = 2。① − ② で左辺は何になる？';
+          answer='2y';
+          distractors=['2x','y','0'];
+          steps=['同じ文字どうしを引こう。','x − x = 0。','y − (−y) = y + y = 2y。'];
+          break;
+        case 'divide':
+          q='2y = '+fmt(a)+' のとき、y は？';
+          answer=a/2;
+          distractors=[a,-answer,a-2];
+          steps=['2y は y の2倍。左右を同じ数で割ろう。','両辺を 2 で割ると、y = '+fmt(a)+' ÷ 2 = '+fmt(answer)+'。'];
+          break;
+        case 'double':
+        case 'solve': {
+          const double=kind==='double', left=a+b, right=a-b;
+          q='① x + y = '+fmt(left)+'、② x − y = '+fmt(right)+(double?'。① − ② で 2y はいくつ？':'。y はいくつ？');
+          answer=double?2*b:b;
+          distractors=double?[b,left+right,-2*b]:[2*b,a,-b];
+          steps=['①から②を引いて x を消そう。','左辺は x − x = 0、y − (−y) = 2y。','右辺は '+minus(left,right)+' = '+fmt(2*b)+'。','よって 2y = '+fmt(2*b)+'。'];
+          if(!double)steps.push('両辺を 2 で割ると、y = '+fmt(b)+'。');
+          break;
+        }
+      }
+      const choices=[...new Set([answer,...distractors])];
+      if(typeof answer==='number'){
+        for(const offset of [1,-1,2,-2]){
+          if(choices.length>=4)break;
+          if(!choices.includes(answer+offset))choices.push(answer+offset);
+        }
+      }
+      const options=choices.slice(0,4).map(String);
+      const position=[1,3,0,2,2,0,3,1,0,2][index%10];
+      options.splice(position,0,options.shift());
+      const topic=subtract?(kind==='rewrite'?'引き算を足し算に直す':'正負の数を計算する'):
+        kind==='eliminate'?'x を消して 2y を作る':kind==='double'?'2y の値を求める':kind==='divide'?'両辺を2で割る':'連立方程式で y を求める';
+      return {question:{q,answer:String(answer),steps,options,topic},serial:index,choice:{u,v}};
+    }
     function loadTraining(storageKey,total){
       try{
         const saved=JSON.parse(localStorage.getItem(storageKey));
@@ -361,16 +439,18 @@
       }catch(e){}
       return trainInitial();
     }
-    let train=loadTraining(trainKey,trainTotal), dailyTraining=null;
-    let focusPractice=loadTraining(focusPracticeKey,focusSkills.length);
+    let train=loadTraining(trainKey,trainTotal), previousTraining=null, dailyTraining=null;
+    const focusPractice={key:focusPracticeKey,total:focusSkills.length,title:'前回の30問',progress:loadTraining(focusPracticeKey,focusSkills.length)};
+    const nextPractice={key:nextPracticeKey,total:nextPracticeItems.length,title:'途中式をつなぐ30問',progress:loadTraining(nextPracticeKey,nextPracticeItems.length)};
     function saveTrain(){
-      try{localStorage.setItem(dailyTraining?focusPracticeKey:trainKey,JSON.stringify(train))}catch(e){}
+      try{localStorage.setItem(dailyTraining?.key||trainKey,JSON.stringify(train))}catch(e){}
     }
     function endFocusPractice(){
       if(!dailyTraining)return;
       train.active=false;
       saveTrain();
-      train=dailyTraining;
+      train=previousTraining;
+      previousTraining=null;
       dailyTraining=null;
     }
 
@@ -984,7 +1064,7 @@
     function trainingFinishAdvice(){
       const mistakes=train.answers.filter(a=>!a.correct||a.hint);
       const label=learnerName();
-      if(!mistakes.length)return label+'、'+(dailyTraining?focusSkills.length:trainTotal)+'問すべて自力でできたね。明日も違う数字で確認すると力がつくよ。';
+      if(!mistakes.length)return label+'、'+(dailyTraining?.total||trainTotal)+'問すべて自力でできたね。明日も違う数字で確認すると力がつくよ。';
       const count=new Map();
       for(const x of mistakes){const k=x.u*5+x.v;count.set(k,(count.get(k)||0)+1)}
       const key=[...count].sort((a,b)=>b[1]-a[1])[0][0],u=Math.floor(key/5),v=key%5;
@@ -1040,8 +1120,9 @@
       return {u:pick.u,v:pick.v};
     }
     function trainingQuestion(){
+      const fixedQuestion=dailyTraining===nextPractice?nextPracticeQuestion(train.done):null;
       if(!train.currentQuestion){
-        const choice=dailyTraining?focusSkills[train.done]:pickTrainingSkill();
+        const choice=fixedQuestion?.choice||(dailyTraining?focusSkills[train.done]:pickTrainingSkill());
         // Keep existing questions while varying both coefficients in later groups.
         const groupOffset=dailyTraining&&train.done>=6?Math.floor(train.done/3):0;
         const serial=train.seed+train.done*47+choice.u*31+choice.v*13+train.attempts*7+groupOffset;
@@ -1051,7 +1132,7 @@
       const {u,v,serial}=train.currentQuestion;
       train.unit=u;train.variant=v;
       train.lastHint=train.currentQuestion.hint;
-      return {question:makeCourseQuestion(u,serial,v,1),serial,choice:{u,v}};
+      return fixedQuestion||{question:makeCourseQuestion(u,serial,v,1),serial,choice:{u,v}};
     }
     function showStudy(){
       sections.intro.classList.add('hide');
@@ -1071,11 +1152,12 @@
       train.active=true;review.active=false;saveTrain();
       showStudy();
     }
-    function startFocusPractice(){
+    function startFocusPractice(practice){
       accrueFocus();
       endFocusPractice();
-      dailyTraining=train;
-      train=focusPractice;
+      previousTraining=train;
+      dailyTraining=practice;
+      train=practice.progress;
       train.active=true;review.active=false;
       showStudy();
     }
@@ -1115,10 +1197,12 @@
         '苦手の候補：「'+titles[weak[0]]+'」から優先して練習するよ。'+suffix:
         'まだ苦手の記録が少ないので、まずは基礎から練習するよ。'+suffix;
       showDailyTraining();
-      const finish=focusPractice.done===focusSkills.length;
-      $('focusProgress').textContent=focusPractice.done+' / '+focusSkills.length+'問';
-      $('focusBtn').textContent=finish?'今日の30問の結果を見る':focusPractice.currentQuestion||focusPractice.done?'今日の30問の続きから':'今日の30問を始める';
-      $('focusGuide').classList.toggle('hide',finish);
+      $('focusProgress').textContent=focusPractice.progress.done+' / '+focusPractice.total+'問';
+      $('focusBtn').textContent=focusPractice.progress.done===focusPractice.total?'結果を見る':'開く →';
+      const progress=nextPractice.progress;
+      $('nextPracticeProgress').textContent=progress.done+' / '+nextPractice.total+'問';
+      $('nextPracticeBtn').textContent=progress.done===nextPractice.total?'30問の結果を見る':
+        progress.currentQuestion||progress.done||progress.checkpointDone?'続きから再開する':'新しい30問を始める';
       showCoach();showGrowth();
       $('course1Status').textContent=courseStatus(1);
       $('course2Status').textContent=courseStatus(2);
@@ -1601,7 +1685,7 @@
       feedback.replaceChildren();
       const head=document.createElement('div');
       head.className='explanation-title';
-      const skill=train.active?skillTitle(unit,train.variant):titles[unit];
+      const skill=q.topic||(train.active?skillTitle(unit,train.variant):titles[unit]);
       head.textContent=right
         ?(train.active&&train.lastHint?'ヒントを使って正解！':'正解！')+'「'+skill+'」ができたね。'
         :'答えは '+fmt(q.answer)+'。途中式を一緒に見てみよう。';
@@ -1623,17 +1707,42 @@
       $('trainHintPanel').classList.add('hide');$('trainHintText').classList.add('hide');
       $('trainAgainBtn').classList.add('hide');
       $('studySheet').classList.remove('milestone');
-      const target=dailyTraining?focusSkills.length:trainTotal;
+      const target=dailyTraining?.total||trainTotal;
+      const stepPractice=dailyTraining===nextPractice;
+      if(train.active&&stepPractice&&train.done<target&&train.done%10===0&&train.checkpointDone!==train.done+1){
+        const set=train.done/10;
+        const lesson=nextPracticeLessons[set];
+        $('studySheet').classList.add('milestone');
+        el.unitTitle.textContent='セット '+(set+1)+' / 3';
+        el.counter.textContent=train.done+' / '+target+'問完了';
+        el.progressBar.style.width=Math.round(train.done*100/target)+'%';
+        el.questionBox.textContent=lesson.title;
+        const previous=train.answers.slice(Math.max(0,train.done-10),train.done);
+        const score=previous.filter(item=>item.correct&&!item.hint).length;
+        el.feedbackBox.textContent=(set?'前のセットはヒントなしで '+score+' / 10問正解。\n':'')+'例題　'+lesson.example;
+        el.feedbackBox.className='feedback good';
+        el.nextBtn.textContent='この10問を始める →';
+        el.nextBtn.classList.remove('hide');
+        el.nextBtn.onclick=()=>{train.checkpointDone=train.done+1;saveTrain();renderStudyStep()};
+        return;
+      }
       if(train.active&&train.done>=target){
         $('studySheet').classList.add('milestone');
-        el.unitTitle.textContent=dailyTraining?'今日の学習':'通常の特訓';el.counter.textContent=target+' / '+target+'問';
+        el.unitTitle.textContent=dailyTraining?.title||'通常の特訓';el.counter.textContent=target+' / '+target+'問';
         el.progressBar.style.width='100%';
-        el.questionBox.innerHTML='<span class="mini" aria-hidden="true"><span class="e l"></span><span class="e r"></span><span class="m"></span></span>'+(dailyTraining?'今日の30問クリア！':'通常の特訓クリア！');
-        el.feedbackBox.textContent='ヒントなしで正解 '+train.correct+' / '+target+'問。\n'+trainingFinishAdvice();
+        el.questionBox.innerHTML='<span class="mini" aria-hidden="true"><span class="e l"></span><span class="e r"></span><span class="m"></span></span>'+(dailyTraining?'30問クリア！':'通常の特訓クリア！');
+        const finalScore=train.answers.slice(20).filter(item=>item.correct&&!item.hint).length;
+        const nextAdvice='仕上げの10問はヒントなしで '+finalScore+' / 10問正解。\n'+(finalScore>=8?
+          '途中式をつなげて解けるようになったね。':'目安は8問。例題を見直して、もう一度確かめてみよう。');
+        el.feedbackBox.textContent='ヒントなしで正解 '+train.correct+' / '+target+'問。\n'+(stepPractice?nextAdvice:trainingFinishAdvice());
         el.feedbackBox.className='feedback good';
-        el.nextBtn.textContent=dailyTraining?'ホームへ戻る':'通常の特訓をもう一度';
+        el.nextBtn.textContent=stepPractice?'もう一度30問に取り組む':dailyTraining?'ホームへ戻る':'通常の特訓をもう一度';
         el.nextBtn.classList.remove('hide');
         el.nextBtn.onclick=()=>{
+          if(stepPractice){
+            nextPractice.progress=train=trainInitial();
+            train.active=true;saveTrain();renderStudyStep();return;
+          }
           if(dailyTraining){el.backBtn.click();return;}
           train=trainInitial();
           startTraining();
@@ -1672,9 +1781,10 @@
       let u,serial,trainQuestion=null;
       if(train.active){
         const t=trainingQuestion();u=t.choice.u;serial=t.serial;trainQuestion=t.question;
-        el.unitTitle.textContent=titles[u]+' ／ '+skillTitle(u,t.choice.v);
-        const block=Math.floor(train.done/trainBlockSize)+1;
-        el.counter.textContent=(dailyTraining?'今日の学習 ・ ':'セット'+block+'/3 ・ ')+(train.done+1)+'/'+target+'問';
+        el.unitTitle.textContent=t.question.topic||titles[u]+' ／ '+skillTitle(u,t.choice.v);
+        const block=Math.floor(train.done/(stepPractice?10:trainBlockSize))+1;
+        const label=dailyTraining===focusPractice?'前回の30問':'セット '+block+'/3';
+        el.counter.textContent=label+' ・ '+(train.done+1)+'/'+target+'問';
         el.progressBar.style.width=Math.round(train.done*100/target)+'%';
         train.requestedRetry=false;
       }else if(review.active){
@@ -1723,7 +1833,7 @@
         if(train.recent.length>6)train.recent=train.recent.slice(-6);
         train.done++;
         train.currentQuestion=null;
-        if(train.done===(dailyTraining?focusSkills.length:trainTotal))train.completedAt=new Date().toISOString();
+        if(train.done===(dailyTraining?.total||trainTotal))train.completedAt=new Date().toISOString();
         saveTrain();renderStudyStep();return;
       }
       if(review.active){
@@ -1747,8 +1857,10 @@
         train.currentQuestion.response=selected;
         train.answers.push({u:train.unit,v:train.variant,correct:right,hint:!!train.lastHint,time:new Date().toISOString()});
         saveTrain();
-        logAnswer(selected,right,train.unit,train.unit*requiredPerUnit+train.variant+1,
-          'v5-train-u'+(train.unit+1)+'s'+train.variant,train.variant);
+        const stepPractice=dailyTraining===nextPractice;
+        logAnswer(selected,right,train.unit,stepPractice?train.done+1:train.unit*requiredPerUnit+train.variant+1,
+          stepPractice?'v6-step-by-step':'v5-train-u'+(train.unit+1)+'s'+train.variant,
+          stepPractice&&['rewrite','eliminate','double','divide'].includes(nextPracticeItems[train.done][0])?null:train.variant);
       }else if(review.active){
         review.attempts++;
         review.lastRight=right;
@@ -1789,7 +1901,8 @@
     $('startCourse2Btn').onclick=()=>start(2);
     $('reviewBtn').onclick=()=>{train.active=false;startReview(false)};
     $('trainBtn').onclick=startTraining;
-    $('focusBtn').onclick=startFocusPractice;
+    $('focusBtn').onclick=()=>startFocusPractice(focusPractice);
+    $('nextPracticeBtn').onclick=()=>startFocusPractice(nextPractice);
     $('saveNickname').onclick=()=>{
       const name=String($('nicknameInput').value||'').trim().slice(0,16);
       try{
@@ -1815,8 +1928,8 @@
       train.requestedRetry=true;saveTrain();advance();
     };
     el.backBtn.onclick=()=>{
+      const returnHeading=dailyTraining===nextPractice?'nextPracticeTitle':dailyTraining?'focusTitle':train.active?'todayTitle':'coursesTitle';
       accrueFocus();stopAuto();pending=false;review.active=false;train.active=false;
-      const returnHeading=dailyTraining?'focusTitle':'todayTitle';
       if(dailyTraining)endFocusPractice();else saveTrain();
       saveReview();showIntro();$(returnHeading).focus();
     };
